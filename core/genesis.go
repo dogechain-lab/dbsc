@@ -258,6 +258,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.ChapelChainConfig
 	case ghash == params.RialtoGenesisHash:
 		return params.RialtoChainConfig
+	case ghash == params.DCGenesisHash:
+		return params.DCChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}
