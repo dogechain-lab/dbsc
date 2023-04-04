@@ -103,19 +103,6 @@ func IBFTHeaderHash(_w io.Writer, obj *Header) error {
 	w.WriteUint64(h.GasUsed)
 	w.WriteUint64(h.Time)
 	w.WriteBytes(h.Extra)
-	// w.WriteBytes(h.MixDigest[:])
-	// w.WriteBytes(h.Nonce[:])
-	_tmp1 := h.BaseFee != nil
-	if _tmp1 {
-		if h.BaseFee == nil {
-			w.Write(rlp.EmptyString)
-		} else {
-			if h.BaseFee.Sign() == -1 {
-				return rlp.ErrNegativeBigInt
-			}
-			w.WriteBigInt(h.BaseFee)
-		}
-	}
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }
