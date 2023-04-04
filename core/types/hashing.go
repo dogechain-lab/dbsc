@@ -22,6 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
@@ -41,7 +42,22 @@ func rlpHash(x interface{}) (h common.Hash) {
 	sha := hasherPool.Get().(crypto.KeccakState)
 	defer hasherPool.Put(sha)
 	sha.Reset()
-	rlp.Encode(sha, x)
+
+	switch t := x.(type) {
+	case Header:
+		if err := IBFTHeaderHash(sha, &t); err != nil {
+			log.Error("IBFT header hash failed", "err", err)
+			return common.Hash{}
+		}
+	case *Header:
+		if err := IBFTHeaderHash(sha, t); err != nil {
+			log.Error("IBFT header hash failed", "err", err)
+			return common.Hash{}
+		}
+	default:
+		rlp.Encode(sha, x)
+	}
+
 	sha.Read(h[:])
 	return h
 }
