@@ -46,25 +46,30 @@ func rlpHash(x interface{}) (h common.Hash) {
 
 	switch t := x.(type) {
 	case Header:
-		if err := IBFTHeaderHash(sha, &t); err != nil {
-			if !errors.Is(err, ErrInvalidIBFTExtraLength) && !errors.Is(err, ErrNotIBFTExtraPrefix) {
-				log.Debug("IBFT header hash failed", "err", err)
-				return common.Hash{}
-			}
-			// fallback to usual rlp hasher
-			rlp.Encode(sha, x)
-		}
+		return headerHashWithFallback(sha, &t)
 	case *Header:
-		if err := IBFTHeaderHash(sha, t); err != nil {
-			if !errors.Is(err, ErrInvalidIBFTExtraLength) && !errors.Is(err, ErrNotIBFTExtraPrefix) {
-				log.Debug("IBFT header hash failed", "err", err)
-				return common.Hash{}
-			}
+		return headerHashWithFallback(sha, t)
+	}
+
+	// other types use default rlp hasher
+	rlp.Encode(sha, x)
+	sha.Read(h[:])
+	return h
+}
+
+func headerHashWithFallback(sha crypto.KeccakState, header *Header) (h common.Hash) {
+	// rlp marshal to hasher
+	if err := ibftHeaderHashRLP(sha, header); err != nil {
+		if errors.Is(err, ErrIBFTInvalidMixHash) ||
+			errors.Is(err, ErrInvalidIBFTExtraLength) ||
+			errors.Is(err, ErrNotIBFTExtraPrefix) {
 			// fallback to usual rlp hasher
-			rlp.Encode(sha, x)
+			sha.Reset() // reset buffer to prevent mixup
+			rlp.Encode(sha, header)
+		} else {
+			log.Debug("IBFT header hash failed", "err", err)
+			return common.Hash{}
 		}
-	default:
-		rlp.Encode(sha, x)
 	}
 
 	sha.Read(h[:])

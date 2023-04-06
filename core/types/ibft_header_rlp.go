@@ -15,6 +15,7 @@ const (
 )
 
 var (
+	ErrIBFTInvalidMixHash     = errors.New("invalid ibft mix hash")
 	ErrInvalidIBFTExtraLength = errors.New("invalid ibft extra length")
 	ErrNotIBFTExtraPrefix     = errors.New("not ibft extra prefix")
 )
@@ -78,7 +79,11 @@ func putIBFTExtraValidators(h *Header, validators []common.Address) error {
 	return nil
 }
 
-func IBFTHeaderHash(_w io.Writer, obj *Header) error {
+func ibftHeaderHashRLP(_w io.Writer, obj *Header) error {
+	if obj.MixDigest != IBFTMixHash {
+		return ErrIBFTInvalidMixHash
+	}
+
 	// when hashing the block for signing we have to remove from
 	// the extra field the seal and committed seal items
 	extra, err := getIbftExtra(obj)
