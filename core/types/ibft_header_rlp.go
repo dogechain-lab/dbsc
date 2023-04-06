@@ -1,7 +1,8 @@
 package types
 
 import (
-	"fmt"
+	"bytes"
+	"errors"
 	"io"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -13,6 +14,22 @@ const (
 	IBFTExtraVanity = 32
 )
 
+var (
+	ErrInvalidIBFTExtraLength = errors.New("invalid ibft extra length")
+	ErrNotIBFTExtraPrefix     = errors.New("not ibft extra prefix")
+)
+
+var (
+	// IBFTMixHash represents a hash of "Istanbul practical byzantine fault tolerance"
+	// to identify whether the block is from Istanbul consensus engine
+	IBFTMixHash = common.HexToHash("0x63746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365")
+
+	// IBFTExtraPrefix represents extra hash prefix of "Istanbul practical byzantine fault tolerance".
+	// The difference of extra between geth, bsc and dogechain (ibft) is that ibft uses zero instead of
+	// client version on prefix
+	IBFTExtraPrefix = common.Hash{}
+)
+
 // IBFTExtra defines the structure of the extra field for I(stanbul)BFT
 type IBFTExtra struct {
 	Validators    []common.Address
@@ -20,16 +37,16 @@ type IBFTExtra struct {
 	CommittedSeal [][]byte
 }
 
-var (
-	// IstanbulDigest represents a hash of "Istanbul practical byzantine fault tolerance"
-	// to identify whether the block is from Istanbul consensus engine
-	IstanbulDigest = common.HexToHash("0x63746963616c2062797a616e74696e65206661756c7420746f6c6572616e6365")
-)
-
 // getIbftExtra returns the istanbul extra data field from the passed in header
 func getIbftExtra(h *Header) (*IBFTExtra, error) {
+	// must longer than ibft extra prefix
 	if len(h.Extra) < IBFTExtraVanity {
-		return nil, fmt.Errorf("wrong extra size: %d", len(h.Extra))
+		return nil, ErrInvalidIBFTExtraLength
+	}
+
+	// must be ibft extra prefix
+	if !bytes.Equal(h.Extra[:IBFTExtraVanity], IBFTExtraPrefix[:]) {
+		return nil, ErrNotIBFTExtraPrefix
 	}
 
 	data := h.Extra[IBFTExtraVanity:]
@@ -62,15 +79,15 @@ func putIBFTExtraValidators(h *Header, validators []common.Address) error {
 }
 
 func IBFTHeaderHash(_w io.Writer, obj *Header) error {
-	// this function replaces extra so we need to make a copy
-	h := CopyHeader(obj) // Remove later
-
 	// when hashing the block for signing we have to remove from
 	// the extra field the seal and committed seal items
-	extra, err := getIbftExtra(h)
+	extra, err := getIbftExtra(obj)
 	if err != nil {
 		return err
 	}
+
+	// this function replaces extra so we need to make a copy
+	h := CopyHeader(obj) // Remove later
 
 	putIBFTExtraValidators(h, extra.Validators)
 

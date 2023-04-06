@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"errors"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -46,13 +47,21 @@ func rlpHash(x interface{}) (h common.Hash) {
 	switch t := x.(type) {
 	case Header:
 		if err := IBFTHeaderHash(sha, &t); err != nil {
-			log.Error("IBFT header hash failed", "err", err)
-			return common.Hash{}
+			if !errors.Is(err, ErrInvalidIBFTExtraLength) && !errors.Is(err, ErrNotIBFTExtraPrefix) {
+				log.Debug("IBFT header hash failed", "err", err)
+				return common.Hash{}
+			}
+			// fallback to usual rlp hasher
+			rlp.Encode(sha, x)
 		}
 	case *Header:
 		if err := IBFTHeaderHash(sha, t); err != nil {
-			log.Error("IBFT header hash failed", "err", err)
-			return common.Hash{}
+			if !errors.Is(err, ErrInvalidIBFTExtraLength) && !errors.Is(err, ErrNotIBFTExtraPrefix) {
+				log.Debug("IBFT header hash failed", "err", err)
+				return common.Hash{}
+			}
+			// fallback to usual rlp hasher
+			rlp.Encode(sha, x)
 		}
 	default:
 		rlp.Encode(sha, x)
