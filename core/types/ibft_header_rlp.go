@@ -79,19 +79,7 @@ func putIBFTExtraValidators(h *Header, validators []common.Address) error {
 	return nil
 }
 
-func ibftHeaderHashRLP(_w io.Writer, obj *Header) error {
-	// genesis will not check ibft mix hash
-	if obj.Number.Sign() > 0 && obj.MixDigest != IBFTMixHash {
-		return ErrIBFTInvalidMixHash
-	}
-
-	// when hashing the block for signing we have to remove from
-	// the extra field the seal and committed seal items
-	extra, err := GetIbftExtra(obj.Extra)
-	if err != nil {
-		return err
-	}
-
+func IBFTHeaderExtraRLPHash(_w io.Writer, obj *Header, extra *IBFTExtra) error {
 	// this function replaces extra so we need to make a copy
 	h := CopyHeader(obj) // Remove later
 
@@ -128,4 +116,20 @@ func ibftHeaderHashRLP(_w io.Writer, obj *Header) error {
 	w.WriteBytes(h.Extra)
 	w.ListEnd(_tmp0)
 	return w.Flush()
+}
+
+func IBFTHeaderHashRLP(_w io.Writer, obj *Header) error {
+	// genesis will not check ibft mix hash
+	if obj.Number.Sign() > 0 && obj.MixDigest != IBFTMixHash {
+		return ErrIBFTInvalidMixHash
+	}
+
+	// when hashing the block for signing we have to remove from
+	// the extra field the seal and committed seal items
+	extra, err := GetIbftExtra(obj.Extra)
+	if err != nil {
+		return err
+	}
+
+	return IBFTHeaderExtraRLPHash(_w, obj, extra)
 }

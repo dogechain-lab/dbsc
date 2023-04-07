@@ -570,6 +570,22 @@ func (c *ChainConfig) IsOnPlanck(num *big.Int) bool {
 	return configNumEqual(c.PlanckBlock, num)
 }
 
+func (c *ChainConfig) IsPortland(num *big.Int) bool {
+	return isForked(c.PortlandBlock, num)
+}
+
+func (c *ChainConfig) IsOnPortland(num *big.Int) bool {
+	return configNumEqual(c.PortlandBlock, num)
+}
+
+func (c *ChainConfig) IsDetorit(num *big.Int) bool {
+	return isForked(c.DetroitBlock, num)
+}
+
+func (c *ChainConfig) IsOnDetorit(num *big.Int) bool {
+	return configNumEqual(c.DetroitBlock, num)
+}
+
 // CheckCompatible checks whether scheduled fork transitions have been imported
 // with a mismatching chain configuration.
 func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64) *ConfigCompatError {

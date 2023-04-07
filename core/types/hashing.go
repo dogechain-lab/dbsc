@@ -57,7 +57,7 @@ func rlpHash(x interface{}) (h common.Hash) {
 
 func headerHashWithFallback(sha crypto.KeccakState, header *Header) (h common.Hash) {
 	// rlp marshal to hasher
-	if err := ibftHeaderHashRLP(sha, header); err != nil {
+	if err := IBFTHeaderHashRLP(sha, header); err != nil {
 		sha.Reset()             // reset buffer to prevent mixup
 		rlp.Encode(sha, header) // fallback to usual rlp hasher
 	}
