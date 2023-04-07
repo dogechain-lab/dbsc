@@ -38,22 +38,22 @@ type IBFTExtra struct {
 	CommittedSeal [][]byte
 }
 
-// getIbftExtra returns the istanbul extra data field from the passed in header
-func getIbftExtra(h *Header) (*IBFTExtra, error) {
+// GetIbftExtra returns the istanbul extra data field from the passed in header
+func GetIbftExtra(extradata []byte) (*IBFTExtra, error) {
 	// must longer than ibft extra prefix
-	if len(h.Extra) < IBFTExtraVanity {
+	if len(extradata) < IBFTExtraVanity {
 		return nil, ErrInvalidIBFTExtraLength
 	}
 
 	// must be ibft extra prefix
-	if !bytes.Equal(h.Extra[:IBFTExtraVanity], IBFTExtraPrefix[:]) {
+	if !bytes.Equal(extradata[:IBFTExtraVanity], IBFTExtraPrefix[:]) {
 		return nil, ErrNotIBFTExtraPrefix
 	}
 
-	data := h.Extra[IBFTExtraVanity:]
+	realdata := extradata[IBFTExtraVanity:]
 	extra := &IBFTExtra{}
 
-	if err := rlp.DecodeBytes(data, extra); err != nil {
+	if err := rlp.DecodeBytes(realdata, extra); err != nil {
 		return nil, err
 	}
 
@@ -87,7 +87,7 @@ func ibftHeaderHashRLP(_w io.Writer, obj *Header) error {
 
 	// when hashing the block for signing we have to remove from
 	// the extra field the seal and committed seal items
-	extra, err := getIbftExtra(obj)
+	extra, err := GetIbftExtra(obj.Extra)
 	if err != nil {
 		return err
 	}
