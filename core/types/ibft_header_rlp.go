@@ -80,7 +80,8 @@ func putIBFTExtraValidators(h *Header, validators []common.Address) error {
 }
 
 func ibftHeaderHashRLP(_w io.Writer, obj *Header) error {
-	if obj.MixDigest != IBFTMixHash {
+	// genesis will not check ibft mix hash
+	if obj.Number.Sign() > 0 && obj.MixDigest != IBFTMixHash {
 		return ErrIBFTInvalidMixHash
 	}
 

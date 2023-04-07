@@ -18,12 +18,10 @@ package types
 
 import (
 	"bytes"
-	"errors"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"golang.org/x/crypto/sha3"
 )
@@ -60,16 +58,8 @@ func rlpHash(x interface{}) (h common.Hash) {
 func headerHashWithFallback(sha crypto.KeccakState, header *Header) (h common.Hash) {
 	// rlp marshal to hasher
 	if err := ibftHeaderHashRLP(sha, header); err != nil {
-		if errors.Is(err, ErrIBFTInvalidMixHash) ||
-			errors.Is(err, ErrInvalidIBFTExtraLength) ||
-			errors.Is(err, ErrNotIBFTExtraPrefix) {
-			// fallback to usual rlp hasher
-			sha.Reset() // reset buffer to prevent mixup
-			rlp.Encode(sha, header)
-		} else {
-			log.Debug("IBFT header hash failed", "err", err)
-			return common.Hash{}
-		}
+		sha.Reset()             // reset buffer to prevent mixup
+		rlp.Encode(sha, header) // fallback to usual rlp hasher
 	}
 
 	sha.Read(h[:])
