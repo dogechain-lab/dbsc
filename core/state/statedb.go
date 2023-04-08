@@ -373,7 +373,7 @@ func (s *StateDB) GetLogs(hash common.Hash, blockHash common.Hash) []*types.Log 
 	return logs
 }
 
-func (s *StateDB) Logs() []*types.Log {
+func (s *StateDB) Logs() types.Logs {
 	var logs []*types.Log
 	for _, lgs := range s.logs {
 		logs = append(logs, lgs...)

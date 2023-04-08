@@ -138,3 +138,9 @@ func (l *LogForStorage) DecodeRLP(s *rlp.Stream) error {
 	}
 	return err
 }
+
+type Logs []*Log
+
+func (l Logs) Hash() common.Hash {
+	return rlpHash(l)
+}

@@ -41,7 +41,27 @@ func rlpHash(x interface{}) (h common.Hash) {
 	sha := hasherPool.Get().(crypto.KeccakState)
 	defer hasherPool.Put(sha)
 	sha.Reset()
+
+	switch t := x.(type) {
+	case Header:
+		return headerHashWithFallback(sha, &t)
+	case *Header:
+		return headerHashWithFallback(sha, t)
+	}
+
+	// other types use default rlp hasher
 	rlp.Encode(sha, x)
+	sha.Read(h[:])
+	return h
+}
+
+func headerHashWithFallback(sha crypto.KeccakState, header *Header) (h common.Hash) {
+	// rlp marshal to hasher
+	if err := ibftHeaderHashRLP(sha, header); err != nil {
+		sha.Reset()             // reset buffer to prevent mixup
+		rlp.Encode(sha, header) // fallback to usual rlp hasher
+	}
+
 	sha.Read(h[:])
 	return h
 }
