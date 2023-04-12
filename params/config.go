@@ -376,6 +376,8 @@ func (c *ChainConfig) String() string {
 		engine = c.Clique
 	case c.Parlia != nil:
 		engine = c.Parlia
+	case c.IBFT != nil:
+		engine = c.IBFT
 	default:
 		engine = "unknown"
 	}
