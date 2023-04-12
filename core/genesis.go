@@ -260,6 +260,8 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.RialtoChainConfig
 	case ghash == params.DCGenesisHash:
 		return params.DCChainConfig
+	case ghash == params.DCDevnetGenesisHash:
+		return params.DCDevnetChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}

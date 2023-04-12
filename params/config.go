@@ -34,7 +34,8 @@ var (
 	ChapelGenesisHash = common.HexToHash("0x6d3c66c5357ec91d5c43af47e234a939b22557cbb552dc45bebbceeed90fbe34")
 	RialtoGenesisHash = common.HexToHash("0xee835a629f9cf5510b48b6ba41d69e0ff7d6ef10f977166ef939db41f59f5501")
 
-	DCGenesisHash = common.HexToHash("0x5ee4e79b3d798f8bd5a3a5f92e24f62198888aed028354ad5463aea8e5da5b74")
+	DCGenesisHash       = common.HexToHash("0x5ee4e79b3d798f8bd5a3a5f92e24f62198888aed028354ad5463aea8e5da5b74")
+	DCDevnetGenesisHash = common.HexToHash("0x75d36607ff0e081d53cf9999d3abd2050f1865e443fe2197236e0ab76aad4443")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -188,6 +189,27 @@ var (
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
+		PortlandBlock:       big.NewInt(1981991),
+		DetroitBlock:        big.NewInt(4490834),
+
+		IBFT: &IBFTConfig{
+			EpochSize: 7200,
+			Type:      IBFTPoS,
+		},
+	}
+
+	DCDevnetChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(668),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		PortlandBlock:       big.NewInt(1065956),
+		DetroitBlock:        big.NewInt(2661202),
 
 		IBFT: &IBFTConfig{
 			EpochSize: 7200,
