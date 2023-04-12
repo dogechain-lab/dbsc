@@ -54,6 +54,8 @@ var (
 		common.HexToAddress(systemcontracts.DCBridgeContract):       true,
 		common.HexToAddress(systemcontracts.DCVaultContract):        true,
 	}
+
+	targetBlockTime = 2 * time.Second // currently set by default, should move to genesis configs
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -64,6 +66,21 @@ var (
 	// errUnknownBlock is returned when the list of validators is requested for a block
 	// that is not part of the local blockchain.
 	errUnknownBlock = errors.New("unknown block")
+
+	// errEmptyValidatorExtract is returned when validators not in header
+	errEmptyValidatorExtract = errors.New("empty extract validatorset")
+
+	// errInvalidBlockTimestamp is returned when it is a future block.
+	errInvalidBlockTimestamp = errors.New("invalid block timestamp")
+
+	// errInvalidCommittedSeal is returned when committed seal not from valid validators.
+	errInvalidCommittedSeal = errors.New("invalid committed seal")
+
+	// errInvalidCoinbase is returned when coinbase not match with block sealer(validator).
+	errInvalidCoinbase = errors.New("invalid coinbase")
+
+	// errValidatorNotAuthorized is returned when validator not authorized by community.
+	errValidatorNotAuthorized = errors.New("validator is not authorized")
 
 	// errMissingVanity is returned if a block's extra-data section is shorter than
 	// 32 bytes, which is required to store the signer vanity.
@@ -80,9 +97,6 @@ var (
 	// errInvalidSpanValidators is returned if a block contains an
 	// invalid list of validators (i.e. non divisible by 20 bytes).
 	errInvalidSpanValidators = errors.New("invalid validator list on sprint end block")
-
-	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
-	errInvalidMixDigest = errors.New("non-zero mix digest")
 
 	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
 	errInvalidUncleHash = errors.New("non empty uncle hash")
@@ -289,6 +303,67 @@ func (p *IBFT) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
 func (p *IBFT) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+	// Ensure that the mix digest is ibft mix hash
+	if header.MixDigest != types.IBFTMixHash {
+		return types.ErrIBFTInvalidMixHash
+	}
+	// Ensure that the block doesn't contain any uncles which are meaningless in PoS
+	if header.UncleHash != types.EmptyUncleHash {
+		return errInvalidUncleHash
+	}
+	// Difficulty has to match number for previous ibft consensus
+	if header.Number.Cmp(header.Difficulty) != 0 {
+		return errInvalidDifficulty
+	}
+
+	// check timestamp after detorit hard fork
+	if p.chainConfig.IsDetorit(header.Number) {
+		// Get parent
+		var parent *types.Header
+		if len(parents) > 0 {
+			parent = parents[len(parents)-1]
+		} else {
+			parent = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
+		}
+		// The diff between block timestamp and 'now' should not exceeds timeout.
+		// Timestamp ascending array [parentTs, blockTs, now+blockTimeout]
+		before, after := parent.Time, uint64(time.Now().Add(targetBlockTime).Unix())
+
+		// header timestamp should not goes back
+		if header.Time <= before || header.Time > after {
+			log.Warn("future blocktime invalid",
+				"before", before,
+				"after", after,
+				"current", header.Time,
+			)
+
+			return errInvalidBlockTimestamp
+		}
+	}
+
+	// Verify the sealer
+	return p.verifySigner(chain, header, parents)
+}
+
+func (p *IBFT) verifySigner(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+	// Recover validator first
+	validator, err := ecrecover(header, p.signatures, p.chainConfig.ChainID)
+	if err != nil {
+		return errInvalidCommittedSeal
+	}
+	// Ensure that coinbase is validator
+	if header.Coinbase != validator {
+		return errInvalidCoinbase
+	}
+	// check validator in list
+	snap, err := p.snapshot(chain, header.Number.Uint64()-1, header.ParentHash, parents)
+	if err != nil {
+		return err
+	}
+	if !snap.includeValidator(validator) {
+		return errValidatorNotAuthorized
+	}
+
 	return nil
 }
 
