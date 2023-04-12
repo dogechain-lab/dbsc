@@ -316,7 +316,7 @@ func (p *IBFT) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 		return errInvalidDifficulty
 	}
 
-	// check timestamp after detorit hard fork
+	// Check timestamp after detroit hard fork
 	if p.chainConfig.IsDetorit(header.Number) {
 		// Get parent
 		var parent *types.Header
