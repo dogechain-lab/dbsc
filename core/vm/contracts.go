@@ -77,8 +77,10 @@ var PrecompiledContractsIstanbul = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
 	common.BytesToAddress([]byte{9}): &blake2F{},
 
-	common.BytesToAddress([]byte{100}): &tmHeaderValidate{},
-	common.BytesToAddress([]byte{101}): &iavlMerkleProofValidate{},
+	// These two are not supported by Dogechain, disable it for now.
+	// Should add it back after such hard fork.
+	// common.BytesToAddress([]byte{100}): &tmHeaderValidate{},
+	// common.BytesToAddress([]byte{101}): &iavlMerkleProofValidate{},
 }
 
 var PrecompiledContractsNano = map[common.Address]PrecompiledContract{
