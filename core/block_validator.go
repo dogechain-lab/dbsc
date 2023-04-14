@@ -136,13 +136,14 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	// Validate the received block's bloom with the one derived from the generated receipts.
 	// For valid blocks this should always validate to true.
 	validateFuns := []func() error{
-		func() error {
-			rbloom := types.CreateBloom(receipts)
-			if rbloom != header.Bloom {
-				return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
-			}
-			return nil
-		},
+		// TODO: verify bloom after hard fork
+		// func() error {
+		// 	rbloom := types.CreateBloom(receipts)
+		// 	if rbloom != header.Bloom {
+		// 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
+		// 	}
+		// 	return nil
+		// },
 		func() error {
 			receiptSha := types.DeriveSha(receipts, trie.NewStackTrie(nil))
 			if receiptSha != header.ReceiptHash {

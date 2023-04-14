@@ -150,7 +150,7 @@ func ecrecover(header *types.Header, sigCache *lru.ARCCache, chainId *big.Int) (
 	// Recover the public key and the Ethereum address
 	// TODO: should be use different hash from IBFT for
 	// not modified block hash?
-	pubkey, err := crypto.Ecrecover(hash.Bytes(), extra.Seal)
+	pubkey, err := crypto.Ecrecover(crypto.Keccak256(hash.Bytes()), extra.Seal)
 	if err != nil {
 		return common.Address{}, err
 	}
