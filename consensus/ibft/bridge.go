@@ -53,8 +53,8 @@ func (p *IBFT) handleBridgeLog(log *types.Log, state *state.StateDB) error {
 		}
 		// the total one is the real amount of Withdrawn event
 		realAmount := new(big.Int).Add(withdrawn.Amount, withdrawn.Fee)
-		// withdraw to bridge
-		state.SubBalance(withdrawn.Sender, realAmount)
+		// withdraw balance from bridge to another network
+		state.SubBalance(_bridgeContractAddr, realAmount)
 		// the fee goes to system Vault contract
 		state.AddBalance(_vaultContractAddr, withdrawn.Fee)
 	case _eventBurned:
