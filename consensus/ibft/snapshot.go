@@ -82,6 +82,11 @@ func loadSnapshot(config *params.IBFTConfig, sigCache *lru.ARCCache, db ethdb.Da
 	snap.config = config
 	snap.sigCache = sigCache
 	snap.ethAPI = ethAPI
+	// reset cache
+	snap.validatorSet = make(map[common.Address]struct{})
+	for _, val := range snap.Validators {
+		snap.validatorSet[val] = struct{}{}
+	}
 
 	return snap, nil
 }
