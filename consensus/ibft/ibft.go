@@ -46,9 +46,6 @@ const (
 )
 
 var (
-	// 100 native token
-	maxSystemBalance = new(big.Int).Mul(big.NewInt(100), big.NewInt(params.Ether))
-
 	systemContracts = map[common.Address]bool{
 		common.HexToAddress(systemcontracts.DCValidatorSetContract): true,
 		common.HexToAddress(systemcontracts.DCBridgeContract):       true,
@@ -67,9 +64,6 @@ var (
 	// that is not part of the local blockchain.
 	errUnknownBlock = errors.New("unknown block")
 
-	// errEmptyValidatorExtract is returned when validators not in header
-	errEmptyValidatorExtract = errors.New("empty extract validatorset")
-
 	// errInvalidBlockTimestamp is returned when it is a future block.
 	errInvalidBlockTimestamp = errors.New("invalid block timestamp")
 
@@ -82,28 +76,8 @@ var (
 	// errValidatorNotAuthorized is returned when validator not authorized by community.
 	errValidatorNotAuthorized = errors.New("validator is not authorized")
 
-	// errMissingVanity is returned if a block's extra-data section is shorter than
-	// 32 bytes, which is required to store the signer vanity.
-	errMissingVanity = errors.New("extra-data 32 byte vanity prefix missing")
-
-	// errMissingSignature is returned if a block's extra-data section doesn't seem
-	// to contain a 65 byte secp256k1 signature.
-	errMissingSignature = errors.New("extra-data 65 byte signature suffix missing")
-
-	// errExtraValidators is returned if non-sprint-end block contain validator data in
-	// their extra-data fields.
-	errExtraValidators = errors.New("non-sprint-end block contains extra validator list")
-
-	// errInvalidSpanValidators is returned if a block contains an
-	// invalid list of validators (i.e. non divisible by 20 bytes).
-	errInvalidSpanValidators = errors.New("invalid validator list on sprint end block")
-
 	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
 	errInvalidUncleHash = errors.New("non empty uncle hash")
-
-	// errMismatchingEpochValidators is returned if a sprint block contains a
-	// list of validators different than the one the local node calculated.
-	errMismatchingEpochValidators = errors.New("mismatching validator list on epoch block")
 
 	// errInvalidDifficulty is returned if the difficulty of a block is missing.
 	errInvalidDifficulty = errors.New("invalid difficulty")
@@ -118,9 +92,6 @@ var (
 
 	// errUnauthorizedValidator is returned if a header is signed by a non-authorized entity.
 	errUnauthorizedValidator = errors.New("unauthorized validator")
-
-	// errCoinBaseMisMatch is returned if a header's coinbase do not match with signature
-	errCoinBaseMisMatch = errors.New("coinbase do not match with signature")
 )
 
 // SignerFn is a signer callback function to request a header to be signed by a
