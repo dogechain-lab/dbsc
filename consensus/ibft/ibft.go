@@ -173,8 +173,6 @@ type IBFT struct {
 	recentSnaps *lru.ARCCache // Snapshots for recent block to speed up
 	signatures  *lru.ARCCache // Signatures of recent blocks to speed up mining
 
-	recentValidators *lru.ARCCache // validator sets for recent block to speed up
-
 	signer types.Signer
 
 	val      common.Address // Ethereum address of the signing key
@@ -184,9 +182,9 @@ type IBFT struct {
 	lock sync.RWMutex // Protects the signer fields
 
 	ethAPI          *ethapi.PublicBlockChainAPI
-	validatorSetABI abi.ABI
-	bridgeABI       abi.ABI
-	vaultABI        abi.ABI
+	validatorSetABI *abi.ABI
+	bridgeABI       *abi.ABI
+	vaultABI        *abi.ABI
 }
 
 // New creates a IBFT consensus engine.
@@ -236,9 +234,9 @@ func New(
 		ethAPI:          ethAPI,
 		recentSnaps:     recentSnaps,
 		signatures:      signatures,
-		validatorSetABI: vABI,
-		bridgeABI:       bABI,
-		vaultABI:        vaultABI,
+		validatorSetABI: &vABI,
+		bridgeABI:       &bABI,
+		vaultABI:        &vaultABI,
 		signer:          types.NewEIP155Signer(chainConfig.ChainID),
 	}
 
@@ -497,6 +495,15 @@ func (p *IBFT) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 // rewards given.
 func (p *IBFT) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
 	uncles []*types.Header, receipts *[]*types.Receipt, systemTxs *[]*types.Transaction, usedGas *uint64) error {
+	// handle bridge logs
+	for _, receipt := range *receipts {
+		for _, rlog := range receipt.Logs {
+			if err := p.handleBridgeLog(rlog, state); err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
