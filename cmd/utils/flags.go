@@ -18,10 +18,11 @@
 package utils
 
 import (
+	"bytes"
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"os"
@@ -111,6 +112,12 @@ func printHelp(out io.Writer, templ string, data interface{}) {
 // are the same for all commands.
 
 var (
+	// Genesis settings
+	GenesisFlag = cli.StringFlag{
+		Name:  "genesis",
+		Usage: "Path to genesis JSON file, ignore genesis block from database",
+		Value: "./genesis.json",
+	}
 	// General settings
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
@@ -1181,6 +1188,25 @@ func MakeAddress(ks *keystore.KeyStore, account string) (accounts.Account, error
 	return accs[index], nil
 }
 
+// setGenesis loads the genesis block from the given path
+func setGenesis(ctx *cli.Context, cfg *ethconfig.Config) {
+	var genesisPath string
+	if ctx.GlobalIsSet(GenesisFlag.Name) {
+		genesisPath = ctx.GlobalString(GenesisFlag.Name)
+	}
+	if genesisPath != "" {
+		genesis := new(core.Genesis)
+		file, err := os.ReadFile(genesisPath)
+		if err != nil {
+			Fatalf("Failed to read genesis file: %v", err)
+		}
+		if err := json.NewDecoder(bytes.NewReader(file)).Decode(genesis); err != nil {
+			Fatalf("invalid genesis file: %v", err)
+		}
+		cfg.Genesis = genesis
+	}
+}
+
 // setEtherbase retrieves the etherbase either from the directly specified
 // command line flags or from the keystore if CLI indexed.
 func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *ethconfig.Config) {
@@ -1209,7 +1235,7 @@ func MakePasswordList(ctx *cli.Context) []string {
 	if path == "" {
 		return nil
 	}
-	text, err := ioutil.ReadFile(path)
+	text, err := os.ReadFile(path)
 	if err != nil {
 		Fatalf("Failed to read password file: %v", err)
 	}
@@ -1570,6 +1596,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
 		ks = keystores[0].(*keystore.KeyStore)
 	}
+	setGenesis(ctx, cfg)
 	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO, ctx.GlobalString(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
