@@ -116,7 +116,6 @@ var (
 	GenesisFlag = cli.StringFlag{
 		Name:  "genesis",
 		Usage: "Path to genesis JSON file, ignore genesis block from database",
-		Value: "./genesis.json",
 	}
 	// General settings
 	DataDirFlag = DirectoryFlag{
