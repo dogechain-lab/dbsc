@@ -23,8 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/dccontracts"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/systemcontracts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -47,9 +47,9 @@ const (
 
 var (
 	systemContracts = map[common.Address]bool{
-		common.HexToAddress(systemcontracts.DCValidatorSetContract): true,
-		common.HexToAddress(systemcontracts.DCBridgeContract):       true,
-		common.HexToAddress(systemcontracts.DCVaultContract):        true,
+		common.HexToAddress(dccontracts.DCValidatorSetContract): true,
+		common.HexToAddress(dccontracts.DCBridgeContract):       true,
+		common.HexToAddress(dccontracts.DCVaultContract):        true,
 	}
 
 	targetBlockTime = 2 * time.Second // currently set by default, should move to genesis configs
@@ -581,7 +581,7 @@ func (p *IBFT) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int)
 	}
 	// call
 	msgData := (hexutil.Bytes)(data)
-	toAddress := common.HexToAddress(systemcontracts.DCValidatorSetContract)
+	toAddress := common.HexToAddress(dccontracts.DCValidatorSetContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
 	result, err := p.ethAPI.Call(ctx, ethapi.TransactionArgs{
 		Gas:  &gas,
@@ -624,7 +624,7 @@ func (p *IBFT) slash(spoiledValidators []common.Address, state *state.StateDB, h
 		return err
 	}
 	// get system message
-	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(systemcontracts.DCValidatorSetContract), data, common.Big0)
+	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0)
 	// apply message
 	return p.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
@@ -645,7 +645,7 @@ func (p *IBFT) distributeToValidator(amount *big.Int, validator common.Address,
 		return err
 	}
 	// get system message
-	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(systemcontracts.DCValidatorSetContract), data, amount)
+	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, amount)
 	// apply message
 	return p.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }

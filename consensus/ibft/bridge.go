@@ -6,8 +6,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/dccontracts"
 	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/systemcontracts"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -18,8 +18,8 @@ const (
 )
 
 var (
-	_bridgeContractAddr = common.HexToAddress(systemcontracts.DCBridgeContract)
-	_vaultContractAddr  = common.HexToAddress(systemcontracts.DCVaultContract)
+	_bridgeContractAddr = common.HexToAddress(dccontracts.DCBridgeContract)
+	_vaultContractAddr  = common.HexToAddress(dccontracts.DCVaultContract)
 )
 
 func (p *IBFT) handleBridgeLog(log *types.Log, state *state.StateDB) error {
