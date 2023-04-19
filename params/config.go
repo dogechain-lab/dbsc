@@ -335,7 +335,7 @@ type ChainConfig struct {
 	PreportlandBlock *big.Int `json:"preportlandBlock,omitempty" toml:",omitempty"` // preportlandBlock
 	PortlandBlock    *big.Int `json:"portlandBlock,omitempty" toml:",omitempty"`    // portlandBlock
 	DetroitBlock     *big.Int `json:"detroitBlock,omitempty" toml:",omitempty"`     // detroitBlock
-	HawaiiBlock      *big.Int `json:"hawaiiBlock,omitempty" toml",omitempty"`       // hawaiiBlock
+	HawaiiBlock      *big.Int `json:"hawaiiBlock,omitempty" toml:",omitempty"`      // hawaiiBlock
 
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty" toml:",omitempty"`
