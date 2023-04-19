@@ -511,7 +511,10 @@ func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, 
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		return stateObject.GetCommittedState(s.db, hash)
+		// NOTE: Dogechain ancient data never find out a pending storage.
+		return stateObject.GetAlreadyStoredState(s.db, hash)
+		// This is the right way to do things.
+		// return stateObject.GetCommittedState(s.db, hash)
 	}
 	return common.Hash{}
 }
