@@ -194,7 +194,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 	// the original value is different between ibft and parlia, so we need
 	// a hard fork to re-unite it later.
 	var original common.Hash
-	if evm.chainConfig.IsIBFTBlock(evm.Context.BlockNumber) {
+	if evm.chainConfig.IsIBFT(evm.Context.BlockNumber) {
 		// ibft use a bit strange "eip2200" original value
 		original = evm.StateDB.GetAlreadyStoredState(contract.Address(), x.Bytes32())
 	} else {
