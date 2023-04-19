@@ -534,7 +534,19 @@ func (p *IBFT) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 // rewards given.
 func (p *IBFT) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
 	uncles []*types.Header, receipts *[]*types.Receipt, systemTxs *[]*types.Transaction, usedGas *uint64) error {
-	// handle bridge logs
+	// Apply system transactions at last.
+	if systemTxs != nil {
+		ctx := chainContext{Chain: chain, ibft: p}
+		for _, tx := range *systemTxs {
+			// Sender should be verified, so we simply set coinbase here
+			msg := p.tx2SystemMessage(tx, header.Coinbase)
+			if err := p.applyTransaction(msg, state, header, ctx, txs, receipts, systemTxs, usedGas, false); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Handle bridge logs
 	for _, receipt := range *receipts {
 		for _, rlog := range receipt.Logs {
 			if err := p.handleBridgeLog(rlog, state); err != nil {
@@ -728,6 +740,19 @@ func (p *IBFT) getSystemMessage(from, toAddress common.Address, data []byte, val
 			Value:    value,
 			To:       &toAddress,
 			Data:     data,
+		},
+	}
+}
+
+func (p *IBFT) tx2SystemMessage(tx *types.Transaction, from common.Address) callmsg {
+	return callmsg{
+		ethereum.CallMsg{
+			From:     from,
+			Gas:      tx.Gas(),
+			GasPrice: big.NewInt(0), // It must be zero price
+			Value:    tx.Value(),
+			To:       tx.To(),
+			Data:     tx.Data(),
 		},
 	}
 }
