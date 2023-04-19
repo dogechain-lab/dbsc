@@ -45,11 +45,18 @@ const (
 	extraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
 )
 
+const (
+	_validatorMethodDeposit = "deposit"
+	_validatorMethodSlash   = "slash"
+)
+
 var (
+	_validatorsetContract = common.HexToAddress(dccontracts.DCValidatorSetContract)
+
 	systemContracts = map[common.Address]bool{
-		common.HexToAddress(dccontracts.DCValidatorSetContract): true,
-		common.HexToAddress(dccontracts.DCBridgeContract):       true,
-		common.HexToAddress(dccontracts.DCVaultContract):        true,
+		_validatorsetContract:                             true,
+		common.HexToAddress(dccontracts.DCBridgeContract): true,
+		common.HexToAddress(dccontracts.DCVaultContract):  true,
 	}
 
 	targetBlockTime = 2 * time.Second // currently set by default, should move to genesis configs
@@ -214,19 +221,80 @@ func New(
 	return c
 }
 
+func (p *IBFT) shouldWriteSystemTransactions(header *types.Header) bool {
+	return p.chainConfig.IsDetorit(header.Number)
+}
+
 func (p *IBFT) IsSystemTransaction(tx *types.Transaction, header *types.Header) (bool, error) {
-	// deploy a contract
+	// Active only beyond detroit hardfork.
+	if !p.shouldWriteSystemTransactions(header) {
+		return false, nil
+	}
+	// Deploy a contract.
 	if tx.To() == nil {
 		return false, nil
 	}
+	// System transaction will not charge.
+	if tx.GasPrice().Cmp(big.NewInt(0)) != 0 {
+		return false, nil
+	}
+	// Check out the sender
 	sender, err := types.Sender(p.signer, tx)
 	if err != nil {
-		return false, errors.New("UnAuthorized transaction")
+		return false, errors.New("unauthorized transaction")
 	}
-	if sender == header.Coinbase && p.IsSystemContract(tx.To()) && tx.GasPrice().Cmp(big.NewInt(0)) == 0 {
+	// Ensures coinbase send this transaction.
+	if sender != header.Coinbase {
+		return false, nil
+	}
+
+	// Will only handle validatorset transactions.
+	if p.isValidatorDepositTxSignature(tx) {
 		return true, nil
 	}
+	if p.isValidatorSlashTxSignature(tx) {
+		return true, nil
+	}
+
 	return false, nil
+}
+
+func (p *IBFT) isValidatorDepositTxSignature(tx *types.Transaction) bool {
+	// Ensures matching contract
+	if *tx.To() != _validatorsetContract {
+		return false
+	}
+	// Ensures data length
+	if len(tx.Data()) < 4 {
+		return false
+	}
+
+	method, ok := p.validatorSetABI.Methods[_validatorMethodDeposit]
+	if !ok {
+		log.Warn("validatorset abi not correct")
+		return false
+	}
+
+	return bytes.EqualFold(tx.Data()[:4], method.ID)
+}
+
+func (p *IBFT) isValidatorSlashTxSignature(tx *types.Transaction) bool {
+	// Ensures matching contract
+	if *tx.To() != _validatorsetContract {
+		return false
+	}
+	// Ensures data length
+	if len(tx.Data()) < 4 {
+		return false
+	}
+
+	method, ok := p.validatorSetABI.Methods[_validatorMethodSlash]
+	if !ok {
+		log.Warn("validatorset abi not correct")
+		return false
+	}
+
+	return bytes.EqualFold(tx.Data()[:4], method.ID)
 }
 
 func (p *IBFT) IsSystemContract(to *common.Address) bool {
