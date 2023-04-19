@@ -394,7 +394,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 	// Handle upgrade build-in system contract code
-	if p.config.IBFT != nil { // ibft
+	if p.config.IsIBFTBlock(block.Number()) { // ibft
 		dccontracts.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)
 	} else { // parlia by default
 		systemcontracts.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)

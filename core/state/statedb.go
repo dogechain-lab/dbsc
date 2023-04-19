@@ -507,14 +507,21 @@ func (s *StateDB) GetStorageProof(a common.Address, key common.Hash) ([][]byte, 
 	return proof, err
 }
 
+func (s *StateDB) GetAlreadyStoredState(addr common.Address, hash common.Hash) common.Hash {
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		// get state only from flushed storage slots.
+		return stateObject.GetAlreadyStoredState(s.db, hash)
+	}
+	return common.Hash{}
+}
+
 // GetCommittedState retrieves a value from the given account's committed storage trie.
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
-		// NOTE: Dogechain ancient data never find out a pending storage.
-		return stateObject.GetAlreadyStoredState(s.db, hash)
 		// This is the right way to do things.
-		// return stateObject.GetCommittedState(s.db, hash)
+		return stateObject.GetCommittedState(s.db, hash)
 	}
 	return common.Hash{}
 }
