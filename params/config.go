@@ -297,7 +297,6 @@ var (
 		ArrowGlacierBlock:   big.NewInt(0),
 		Ethash:              new(EthashConfig),
 	}
-	TestRules = TestChainConfig.Rules(new(big.Int), false)
 )
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
@@ -471,7 +470,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Ramanujan: %v, Niels: %v, MirrorSync: %v, Bruno: %v, Berlin: %v, YOLO v3: %v, CatalystBlock: %v, London: %v, ArrowGlacier: %v, MergeFork:%v, Euler: %v, Gibbs: %v, Nano: %v, Moran: %v, Planck: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Ramanujan: %v, Niels: %v, MirrorSync: %v, Bruno: %v, Berlin: %v, YOLO v3: %v, CatalystBlock: %v, London: %v, ArrowGlacier: %v, MergeFork:%v, Euler: %v, Gibbs: %v, Nano: %v, Moran: %v, Planck: %v, IBFT: %v, Preportland: %v, Portland: %v, Detroit: %v, Hawaii: %v, Engine: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -499,6 +498,11 @@ func (c *ChainConfig) String() string {
 		c.NanoBlock,
 		c.MoranBlock,
 		c.PlanckBlock,
+		c.IBFTBlock,
+		c.PreportlandBlock,
+		c.PortlandBlock,
+		c.DetroitBlock,
+		c.HawaiiBlock,
 		engine,
 	)
 }
@@ -905,6 +909,7 @@ type Rules struct {
 	IsNano                                                  bool
 	IsMoran                                                 bool
 	IsPlanck                                                bool
+	IsIBFT                                                  bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -929,5 +934,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool) Rules {
 		IsNano:           c.IsNano(num),
 		IsMoran:          c.IsMoran(num),
 		IsPlanck:         c.IsPlanck(num),
+		IsIBFT:           c.IsIBFT(num),
 	}
 }
