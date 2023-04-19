@@ -164,10 +164,12 @@ func applySystemContractUpgrade(upgrade *Upgrade, blockNumber *big.Int, statedb 
 		}
 		statedb.SetCode(cfg.ContractAddr, newContractCode)
 
-		// initialize system contract storage if necessary
-		statedb.SetStorage(cfg.ContractAddr, cfg.DefaultInitStorage)
+		// Initialize system contract storage if necessary
+		for k, v := range cfg.DefaultInitStorage {
+			statedb.SetState(cfg.ContractAddr, k, v)
+		}
 
-		// deprecated. Reset account balance in test cases
+		// Deprecated. Reset account balance in test cases
 		for account, balance := range cfg.Rebalance {
 			statedb.SetBalance(account, balance)
 		}
