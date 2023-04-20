@@ -222,11 +222,14 @@ func New(
 }
 
 func (p *IBFT) shouldWriteSystemTransactions(header *types.Header) bool {
-	return p.chainConfig.IsDetorit(header.Number)
+	// Begin with detroit hard fork, we do get some "system transactions",
+	// but we don't treat them as system transactions and make direct
+	// contract call only after hawaii hard fork.
+	return p.chainConfig.IsHawaii(header.Number)
 }
 
 func (p *IBFT) IsSystemTransaction(tx *types.Transaction, header *types.Header) (bool, error) {
-	// Active only beyond detroit hardfork.
+	// Ensures activeness
 	if !p.shouldWriteSystemTransactions(header) {
 		return false, nil
 	}
@@ -535,7 +538,7 @@ func (p *IBFT) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 func (p *IBFT) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
 	uncles []*types.Header, receipts *[]*types.Receipt, systemTxs *[]*types.Transaction, usedGas *uint64) error {
 	// Apply system transactions at last.
-	if systemTxs != nil {
+	if systemTxs != nil && len(*systemTxs) > 0 {
 		ctx := chainContext{Chain: chain, ibft: p}
 		for _, tx := range *systemTxs {
 			// Sender should be verified, so we simply set coinbase here
