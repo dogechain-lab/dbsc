@@ -17,8 +17,8 @@
 package diff
 
 import (
+	"crypto/rand"
 	"math/big"
-	"math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -134,10 +134,13 @@ func testGetDiffLayers(t *testing.T, protocol uint) {
 	missDiffPackets := make([]FullDiffLayersPacket, 0)
 
 	for i := 0; i < 100; i++ {
-		number := uint64(rand.Int63n(1024))
-		if number == 0 {
-			continue
+		// Find a non 0 random number (1 ~ 1023)
+		n, err := rand.Int(rand.Reader, big.NewInt(1023))
+		if err != nil {
+			t.Fatalf("Failed to generate random number %v", err)
 		}
+
+		number := n.Uint64() + 1
 		foundHash := backend.chain.GetCanonicalHash(number + 1024)
 		missHash := backend.chain.GetCanonicalHash(number)
 		foundRlp := backend.chain.GetDiffLayerRLP(foundHash)
