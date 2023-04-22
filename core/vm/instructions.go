@@ -645,18 +645,34 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 	// Apply EIP150
 	gas -= gas / 64
 	scope.Contract.UseGas(gas)
+
 	// reuse size int for stackvalue
 	stackvalue := size
+
 	//TODO: use uint256.Int instead of converting with toBig()
 	bigEndowment := big0
 	if !endowment.IsZero() {
 		bigEndowment = endowment.ToBig()
 	}
+
 	res, addr, returnGas, suberr := interpreter.evm.Create2(scope.Contract, input, gas,
 		bigEndowment, &salt)
+
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
-		stackvalue.Clear()
+		if interpreter.evm.chainConfig.IsIBFT(interpreter.evm.Context.BlockNumber) {
+			// IBFT use a strange Create2 opcode stack calling sequence, which is not
+			// EVM compatible. So we need to return address even though it failed due
+			// to not enough gas during running the construction.
+			// But we'll make this unknown issue back to normal after the hard fork
+			if interpreter.evm.chainConfig.IsHawaii(interpreter.evm.Context.BlockNumber) {
+				stackvalue.Clear()
+			} else {
+				stackvalue.SetBytes(addr.Bytes())
+			}
+		} else {
+			stackvalue.Clear()
+		}
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
 	}
