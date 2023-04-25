@@ -77,6 +77,12 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	// If jump table was not initialised we set the default one.
 	if cfg.JumpTable == nil {
 		switch {
+		case evm.chainRules.IsHawaii:
+			// Hawaii instructions are compatible with istanbul.
+			// No more issues should be brought in here.
+			cfg.JumpTable = &hawaiiInstructionSet
+		case evm.chainRules.IsIBFT:
+			cfg.JumpTable = &ibftInstructionSet
 		case evm.chainRules.IsMerge:
 			cfg.JumpTable = &mergeInstructionSet
 		case evm.chainRules.IsLondon:

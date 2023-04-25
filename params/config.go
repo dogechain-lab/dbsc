@@ -910,6 +910,7 @@ type Rules struct {
 	IsMoran                                                 bool
 	IsPlanck                                                bool
 	IsIBFT                                                  bool
+	IsHawaii                                                bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -935,5 +936,6 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool) Rules {
 		IsMoran:          c.IsMoran(num),
 		IsPlanck:         c.IsPlanck(num),
 		IsIBFT:           c.IsIBFT(num),
+		IsHawaii:         c.IsHawaii(num),
 	}
 }

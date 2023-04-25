@@ -191,15 +191,57 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 		return params.SloadGasEIP2200, nil
 	}
 
-	// the original value is different between ibft and parlia, so we need
-	// a hard fork to re-unite it later.
-	var original common.Hash
-	if evm.chainConfig.IsIBFT(evm.Context.BlockNumber) {
-		// ibft use a bit strange "eip2200" original value
-		original = evm.StateDB.GetAlreadyStoredState(contract.Address(), x.Bytes32())
-	} else {
-		original = evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
+	// Get origin value from committed state (might be committed in the
+	// previous transaction)
+	var original = evm.StateDB.GetCommittedState(contract.Address(), x.Bytes32())
+
+	if original == current {
+		if original == (common.Hash{}) { // create slot (2.1.1)
+			return params.SstoreSetGasEIP2200, nil
+		}
+		if value == (common.Hash{}) { // delete slot (2.1.2b)
+			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP2200)
+		}
+		return params.SstoreResetGasEIP2200, nil // write existing slot (2.1.2)
 	}
+	if original != (common.Hash{}) {
+		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+			evm.StateDB.SubRefund(params.SstoreClearsScheduleRefundEIP2200)
+		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
+			evm.StateDB.AddRefund(params.SstoreClearsScheduleRefundEIP2200)
+		}
+	}
+	if original == value {
+		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
+			evm.StateDB.AddRefund(params.SstoreSetGasEIP2200 - params.SloadGasEIP2200)
+		} else { // reset to original existing slot (2.2.2.2)
+			evm.StateDB.AddRefund(params.SstoreResetGasEIP2200 - params.SloadGasEIP2200)
+		}
+	}
+	return params.SloadGasEIP2200, nil // dirty update (2.2)
+}
+
+// ibftGasSStoreEIP2200 acts similarly to gasSStoreEIP2200.
+//
+// IBFT use a bit strange "eip2200" original value, so we seperate it as a
+// specific instruction to avoid judgement of hard fork all the time.
+func ibftGasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	// If we fail the minimum gas availability invariant, fail (0)
+	if contract.Gas <= params.SstoreSentryGasEIP2200 {
+		return 0, errors.New("not enough gas for reentrancy sentry")
+	}
+	// Gas sentry honoured, do the actual gas calculation based on the stored value
+	var (
+		y, x    = stack.Back(1), stack.Back(0)
+		current = evm.StateDB.GetState(contract.Address(), x.Bytes32())
+	)
+	value := common.Hash(y.Bytes32())
+
+	if current == value { // noop (1)
+		return params.SloadGasEIP2200, nil
+	}
+
+	var original = evm.StateDB.GetAlreadyStoredState(contract.Address(), x.Bytes32())
 
 	if original == current {
 		if original == (common.Hash{}) { // create slot (2.1.1)
