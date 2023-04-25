@@ -500,6 +500,23 @@ func opPop(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte
 	return nil, nil
 }
 
+func ibftOpMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	// Pop element to consume
+	v := scope.Stack.pop()
+	offset := int64(v.Uint64())
+	// check memory store
+	value := scope.Memory.GetPtr(offset, 32)
+	// Memory should not be nil here, otherwise we will drop the instruction.
+	if value == nil {
+		return nil, nil
+	}
+	// Push back to stack.
+	vv := v.SetBytes(value)
+	scope.Stack.push(vv)
+
+	return nil, nil
+}
+
 func opMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	v := scope.Stack.peek()
 	offset := int64(v.Uint64())

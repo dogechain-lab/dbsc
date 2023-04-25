@@ -1362,7 +1362,7 @@ func newIBFTInstructionSet() JumpTable {
 			maxStack:    maxStack(1, 0),
 		},
 		MLOAD: {
-			execute:     opMload,
+			execute:     ibftOpMload,
 			constantGas: GasFastestStep,
 			dynamicGas:  gasMLoad,
 			minStack:    minStack(1, 1),
