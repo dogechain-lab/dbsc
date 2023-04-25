@@ -189,6 +189,7 @@ var (
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
+		IBFTBlock:           big.NewInt(0),
 		PortlandBlock:       big.NewInt(1981991),
 		DetroitBlock:        big.NewInt(4490834),
 
@@ -208,6 +209,7 @@ var (
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
+		IBFTBlock:           big.NewInt(0),
 		PreportlandBlock:    big.NewInt(1062992),
 		PortlandBlock:       big.NewInt(1065956),
 		DetroitBlock:        big.NewInt(2661202),
