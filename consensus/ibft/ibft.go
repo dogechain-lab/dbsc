@@ -42,7 +42,7 @@ const (
 	checkpointInterval = 1024           // Number of blocks after which to save the snapshot to the database
 	defaultEpochLength = uint64(100000) // Default number of blocks of checkpoint to update validatorSet from contract
 
-	extraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
+	ExtraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
 )
 
 const (
@@ -438,7 +438,7 @@ func (p *IBFT) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 				// get checkpoint data
 				hash := checkpoint.Hash()
 
-				if len(checkpoint.Extra) <= extraVanity {
+				if len(checkpoint.Extra) <= ExtraVanity {
 					return nil, errors.New("invalid extra-data for genesis block, check the genesis.json file")
 				}
 
