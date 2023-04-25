@@ -119,14 +119,14 @@ func init() {
 func genesisGen(c *cli.Context) error {
 	var (
 		validators    = c.GlobalStringSlice(validatorFlags.Name)
-		premines      = c.GlobalStringSlice(premineFlags.Name)
+		premineList   = c.GlobalStringSlice(premineFlags.Name)
 		bridgeSigners = c.GlobalStringSlice(bridgeSignersFlag.Name)
 	)
 
 	if len(validators) == 0 {
 		return fmt.Errorf("no validators specified")
 	}
-	if len(premines) == 0 {
+	if len(premineList) == 0 {
 		log.Warn("no premine specified")
 	}
 	if !c.GlobalIsSet(validatorsetOwnerFlag.Name) {
@@ -210,7 +210,7 @@ func genesisGen(c *cli.Context) error {
 	genesis.Alloc[common.HexToAddress(dccontracts.DCValidatorSetContract)] = *validatorsAlloc
 	genesis.Alloc[common.HexToAddress(dccontracts.DCVaultContract)] = *(predeployVaultSC(vaultOwner))
 
-	for _, premine := range premines {
+	for _, premine := range premineList {
 		var addr common.Address
 		var val string
 
