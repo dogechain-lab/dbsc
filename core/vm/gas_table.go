@@ -223,7 +223,7 @@ func gasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, m
 
 // ibftGasSStoreEIP2200 acts similarly to gasSStoreEIP2200.
 //
-// IBFT use a bit strange "eip2200" original value, so we seperate it as a
+// IBFT use a bit strange "eip2200" original value, so we separate it as a
 // specific instruction to avoid judgement of hard fork all the time.
 func ibftGasSStoreEIP2200(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
 	// If we fail the minimum gas availability invariant, fail (0)
