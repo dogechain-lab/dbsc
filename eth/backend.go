@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/ibft"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -504,31 +505,33 @@ func (s *Ethereum) StartMining(threads int) error {
 			log.Error("Cannot start mining without etherbase", "err", err)
 			return fmt.Errorf("etherbase missing: %v", err)
 		}
-		var cli *clique.Clique
-		if c, ok := s.engine.(*clique.Clique); ok {
-			cli = c
-		} else if cl, ok := s.engine.(*beacon.Beacon); ok {
-			if c, ok := cl.InnerEngine().(*clique.Clique); ok {
-				cli = c
-			}
-		}
-		if cli != nil {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
-			if wallet == nil || err != nil {
-				log.Error("Etherbase account unavailable locally", "err", err)
-				return fmt.Errorf("signer missing: %v", err)
-			}
-			cli.Authorize(eb, wallet.SignData)
-		}
-		if parlia, ok := s.engine.(*parlia.Parlia); ok {
-			wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
-			if wallet == nil || err != nil {
-				log.Error("Etherbase account unavailable locally", "err", err)
-				return fmt.Errorf("signer missing: %v", err)
-			}
 
-			parlia.Authorize(eb, wallet.SignData, wallet.SignTx)
+		// Wallet
+		wallet, err := s.accountManager.Find(accounts.Account{Address: eb})
+		if wallet == nil || err != nil {
+			log.Error("Etherbase account unavailable locally", "err", err)
+			return fmt.Errorf("signer missing: %v", err)
 		}
+
+		// Different pos(a) consensus
+		if ibft, ok := s.engine.(*ibft.IBFT); ok {
+			ibft.Authorize(eb, wallet.SignData, wallet.SignTx)
+		} else if parlia, ok := s.engine.(*parlia.Parlia); ok {
+			parlia.Authorize(eb, wallet.SignData, wallet.SignTx)
+		} else {
+			var cli *clique.Clique
+			if c, ok := s.engine.(*clique.Clique); ok {
+				cli = c
+			} else if cl, ok := s.engine.(*beacon.Beacon); ok {
+				if c, ok := cl.InnerEngine().(*clique.Clique); ok {
+					cli = c
+				}
+			}
+			if cli != nil {
+				cli.Authorize(eb, wallet.SignData)
+			}
+		}
+
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
 		atomic.StoreUint32(&s.handler.acceptTxs, 1)

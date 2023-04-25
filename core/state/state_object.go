@@ -222,6 +222,65 @@ func (s *StateObject) setOriginStorage(key common.Hash, value common.Hash) {
 	s.originStorage[key] = value
 }
 
+// GetAlreadyStoredState retrieves a value from the stored account storage trie.
+func (s *StateObject) GetAlreadyStoredState(db Database, key common.Hash) common.Hash {
+	// If the fake storage is set, only lookup the state here(in the debugging mode)
+	if s.fakeStorage != nil {
+		return s.fakeStorage[key]
+	}
+	// If we have a clean cached, return that
+	if value, cached := s.getOriginStorage(key); cached {
+		return value
+	}
+	// If no live objects are available, attempt to use snapshots
+	var (
+		enc []byte
+		err error
+	)
+	if s.db.snap != nil {
+		// If the object was destructed in *this* block (and potentially resurrected),
+		// the storage has been cleared out, and we should *not* consult the previous
+		// snapshot about any storage values. The only possible alternatives are:
+		//   1) resurrect happened, and new slot values were set -- those should
+		//      have been handles via pendingStorage above.
+		//   2) we don't have new values, and can deliver empty response back
+		if _, destructed := s.db.snapDestructs[s.address]; destructed {
+			return common.Hash{}
+		}
+		start := time.Now()
+		enc, err = s.db.snap.Storage(s.addrHash, crypto.Keccak256Hash(key.Bytes()))
+		if metrics.EnabledExpensive {
+			s.db.SnapshotStorageReads += time.Since(start)
+		}
+	}
+
+	// If snapshot unavailable or reading from it failed, load from the database
+	if s.db.snap == nil || err != nil {
+		start := time.Now()
+		//		if metrics.EnabledExpensive {
+		//			meter = &s.db.StorageReads
+		//		}
+		enc, err = s.getTrie(db).TryGet(key.Bytes())
+		if metrics.EnabledExpensive {
+			s.db.StorageReads += time.Since(start)
+		}
+		if err != nil {
+			s.setError(err)
+			return common.Hash{}
+		}
+	}
+	var value common.Hash
+	if len(enc) > 0 {
+		_, content, _, err := rlp.Split(enc)
+		if err != nil {
+			s.setError(err)
+		}
+		value.SetBytes(content)
+	}
+	s.setOriginStorage(key, value)
+	return value
+}
+
 // GetCommittedState retrieves a value from the committed account storage trie.
 func (s *StateObject) GetCommittedState(db Database, key common.Hash) common.Hash {
 	// If the fake storage is set, only lookup the state here(in the debugging mode)

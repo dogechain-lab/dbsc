@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/dccontracts"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/systemcontracts"
@@ -163,9 +164,18 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
+
+	var realGenesisHash common.Hash
+	defer func() {
+		if realGenesisHash != (common.Hash{}) {
+			// Never mind whether it is ibft or parlia, set both genesis hash.
+			dccontracts.GenesisHash = realGenesisHash
+			systemcontracts.GenesisHash = realGenesisHash
+		}
+	}()
+
 	// Just commit the new block if there is no stored genesis block.
 	stored := rawdb.ReadCanonicalHash(db, 0)
-	systemcontracts.GenesisHash = stored
 	if (stored == common.Hash{}) {
 		if genesis == nil {
 			log.Info("Writing default main-net genesis block")
@@ -177,8 +187,14 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		if err != nil {
 			return genesis.Config, common.Hash{}, err
 		}
+		// Update genesis hash if we use genesis file instead init it in command line.
+		realGenesisHash = block.Hash()
 		return genesis.Config, block.Hash(), nil
 	}
+
+	// Update genesis hash if we get a canonical one
+	realGenesisHash = stored
+
 	// We have the genesis block in database(perhaps in ancient database)
 	// but the corresponding state is missing.
 	header := rawdb.ReadHeader(db, stored, 0)
@@ -258,6 +274,10 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 		return params.ChapelChainConfig
 	case ghash == params.RialtoGenesisHash:
 		return params.RialtoChainConfig
+	case ghash == params.DCGenesisHash:
+		return params.DCChainConfig
+	case ghash == params.DCDevnetGenesisHash:
+		return params.DCDevnetChainConfig
 	default:
 		return params.AllEthashProtocolChanges
 	}

@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/ibft"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -197,7 +198,10 @@ func (eth *Ethereum) stateAtTransaction(block *types.Block, txIndex int, reexec 
 		}
 		// Not yet the searched for transaction, execute on top of the current state
 		vmenv := vm.NewEVM(context, txContext, statedb, eth.blockchain.Config(), vm.Config{})
-		if posa, ok := eth.Engine().(consensus.PoSA); ok && msg.From() == context.Coinbase &&
+		// Check system transaction in different consensus
+		if _, ok := eth.Engine().(*ibft.IBFT); ok {
+			// Do nothing since we will add transaction fees to coinbase.
+		} else if posa, ok := eth.Engine().(consensus.PoSA); ok && msg.From() == context.Coinbase &&
 			posa.IsSystemContract(msg.To()) && msg.GasPrice().Cmp(big.NewInt(0)) == 0 {
 			balance := statedb.GetBalance(consensus.SystemAddress)
 			if balance.Cmp(common.Big0) > 0 {

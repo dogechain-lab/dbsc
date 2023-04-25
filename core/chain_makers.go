@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/core/dccontracts"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/systemcontracts"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -253,7 +254,12 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 		if config.DAOForkSupport && config.DAOForkBlock != nil && config.DAOForkBlock.Cmp(b.header.Number) == 0 {
 			misc.ApplyDAOHardFork(statedb)
 		}
-		systemcontracts.UpgradeBuildInSystemContract(config, b.header.Number, statedb)
+		// Upgrade system contracts in different protocols.
+		if config.IsIBFT(b.Number()) { // ibft
+			dccontracts.UpgradeBuildInSystemContract(config, b.header.Number, statedb)
+		} else { // parlia by default
+			systemcontracts.UpgradeBuildInSystemContract(config, b.header.Number, statedb)
+		}
 		// Execute any user modifications to the block
 		if gen != nil {
 			gen(i, b)

@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/dccontracts"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/systemcontracts"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -985,7 +986,11 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 
 	// Handle upgrade build-in system contract code
-	systemcontracts.UpgradeBuildInSystemContract(w.chainConfig, header.Number, env.state)
+	if w.chainConfig.IsIBFT(header.Number) { // ibft
+		dccontracts.UpgradeBuildInSystemContract(w.chainConfig, header.Number, env.state)
+	} else { // parlia by default
+		systemcontracts.UpgradeBuildInSystemContract(w.chainConfig, header.Number, env.state)
+	}
 
 	// Accumulate the uncles for the sealing work only if it's allowed.
 	if !genParams.noUncle {

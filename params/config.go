@@ -33,6 +33,9 @@ var (
 	BSCGenesisHash    = common.HexToHash("0x0d21840abff46b96c84b2ac9e10e4f5cdaeb5693cb665db62a2f3b02d2d57b5b")
 	ChapelGenesisHash = common.HexToHash("0x6d3c66c5357ec91d5c43af47e234a939b22557cbb552dc45bebbceeed90fbe34")
 	RialtoGenesisHash = common.HexToHash("0xee835a629f9cf5510b48b6ba41d69e0ff7d6ef10f977166ef939db41f59f5501")
+
+	DCGenesisHash       = common.HexToHash("0x5ee4e79b3d798f8bd5a3a5f92e24f62198888aed028354ad5463aea8e5da5b74")
+	DCDevnetGenesisHash = common.HexToHash("0x75d36607ff0e081d53cf9999d3abd2050f1865e443fe2197236e0ab76aad4443")
 )
 
 // TrustedCheckpoints associates each known checkpoint with the genesis hash of
@@ -175,22 +178,125 @@ var (
 		},
 	}
 
+	// Dogechain mainnet config
+	DCChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(2000),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		PortlandBlock:       big.NewInt(1981991),
+		DetroitBlock:        big.NewInt(4490834),
+
+		IBFT: &IBFTConfig{
+			EpochSize: 7200,
+			Type:      IBFTPoS,
+		},
+	}
+
+	DCDevnetChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(668),
+		HomesteadBlock:      big.NewInt(0),
+		EIP150Block:         big.NewInt(0),
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		PreportlandBlock:    big.NewInt(1062992),
+		PortlandBlock:       big.NewInt(1065956),
+		DetroitBlock:        big.NewInt(2661202),
+
+		IBFT: &IBFTConfig{
+			EpochSize: 7200,
+			Type:      IBFTPoS,
+		},
+	}
+
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllEthashProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), new(EthashConfig), nil, nil}
+	AllEthashProtocolChanges = &ChainConfig{
+		ChainID:                 big.NewInt(1337),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            nil,
+		DAOForkSupport:          false,
+		EIP150Block:             big.NewInt(0),
+		EIP150Hash:              common.Hash{},
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		YoloV3Block:             big.NewInt(0),
+		CatalystBlock:           big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		MergeForkBlock:          nil,
+		TerminalTotalDifficulty: nil,
+		Ethash:                  new(EthashConfig),
+	}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
 	//
 	// This configuration is intentionally not using keyed fields to force anyone
 	// adding flags to the config to also have to set these fields.
-	AllCliqueProtocolChanges = &ChainConfig{big.NewInt(1337), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), nil, nil, nil, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, nil, nil, &CliqueConfig{Period: 0, Epoch: 30000}, nil}
+	AllCliqueProtocolChanges = &ChainConfig{
+		ChainID:                 big.NewInt(1337),
+		HomesteadBlock:          big.NewInt(0),
+		DAOForkBlock:            nil,
+		DAOForkSupport:          false,
+		EIP150Block:             big.NewInt(0),
+		EIP150Hash:              common.Hash{},
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		YoloV3Block:             nil,
+		CatalystBlock:           nil,
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       nil,
+		MergeForkBlock:          nil,
+		TerminalTotalDifficulty: nil,
+		Clique:                  &CliqueConfig{Period: 0, Epoch: 30000},
+	}
 
-	TestChainConfig = &ChainConfig{big.NewInt(1), big.NewInt(0), nil, false, big.NewInt(0), common.Hash{}, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), big.NewInt(0), nil, nil, new(EthashConfig), nil, nil}
-	TestRules       = TestChainConfig.Rules(new(big.Int), false)
+	TestChainConfig = &ChainConfig{
+		ChainID:             big.NewInt(1),
+		HomesteadBlock:      big.NewInt(0),
+		DAOForkBlock:        nil,
+		DAOForkSupport:      false,
+		EIP150Block:         big.NewInt(0),
+		EIP150Hash:          common.Hash{},
+		EIP155Block:         big.NewInt(0),
+		EIP158Block:         big.NewInt(0),
+		ByzantiumBlock:      big.NewInt(0),
+		ConstantinopleBlock: big.NewInt(0),
+		PetersburgBlock:     big.NewInt(0),
+		IstanbulBlock:       big.NewInt(0),
+		MuirGlacierBlock:    big.NewInt(0),
+		BerlinBlock:         big.NewInt(0),
+		YoloV3Block:         big.NewInt(0),
+		CatalystBlock:       big.NewInt(0),
+		LondonBlock:         big.NewInt(0),
+		ArrowGlacierBlock:   big.NewInt(0),
+		Ethash:              new(EthashConfig),
+	}
 )
 
 // TrustedCheckpoint represents a set of post-processed trie roots (CHT and
@@ -288,13 +394,17 @@ type ChainConfig struct {
 	PlanckBlock     *big.Int `json:"planckBlock,omitempty" toml:",omitempty"`     // planckBlock switch block (nil = no fork, 0 = already activated)
 
 	// DC hard forks
-	PortlandBlock *big.Int `json:"portlandBlock,omitempty" toml:",omitempty"` // portlandBlock
-	DetroitBlock  *big.Int `json:"detroitBlock,omitempty" toml:",omitempty"`  // detroitBlock
+	IBFTBlock        *big.Int `json:"ibftBlock,omitempty" toml:",omitempty"`        // ibftBlock, a simulated genesis hard fork for dogechain
+	PreportlandBlock *big.Int `json:"preportlandBlock,omitempty" toml:",omitempty"` // preportlandBlock
+	PortlandBlock    *big.Int `json:"portlandBlock,omitempty" toml:",omitempty"`    // portlandBlock
+	DetroitBlock     *big.Int `json:"detroitBlock,omitempty" toml:",omitempty"`     // detroitBlock
+	HawaiiBlock      *big.Int `json:"hawaiiBlock,omitempty" toml:",omitempty"`      // hawaiiBlock
 
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty" toml:",omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty" toml:",omitempty"`
 	Parlia *ParliaConfig `json:"parlia,omitempty" toml:",omitempty"`
+	IBFT   *IBFTConfig   `json:"ibft,omitempty" toml:",omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -314,6 +424,24 @@ type CliqueConfig struct {
 // String implements the stringer interface, returning the consensus engine details.
 func (c *CliqueConfig) String() string {
 	return "clique"
+}
+
+type IBFTType string
+
+const (
+	IBFTPoS IBFTType = "PoS"
+	IBFTPoA IBFTType = "PoA"
+)
+
+// ParliaConfig is the consensus engine configs for istanbul-byzantium-fault-tolarance based sealing.
+type IBFTConfig struct {
+	EpochSize uint64   `json:"epochSize"`
+	Type      IBFTType `json:"type"`
+}
+
+// String implements the stringer interface, returning the consensus engine details.
+func (c *IBFTConfig) String() string {
+	return "ibft"
 }
 
 // ParliaConfig is the consensus engine configs for proof-of-staked-authority based sealing.
@@ -337,10 +465,12 @@ func (c *ChainConfig) String() string {
 		engine = c.Clique
 	case c.Parlia != nil:
 		engine = c.Parlia
+	case c.IBFT != nil:
+		engine = c.IBFT
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Ramanujan: %v, Niels: %v, MirrorSync: %v, Bruno: %v, Berlin: %v, YOLO v3: %v, CatalystBlock: %v, London: %v, ArrowGlacier: %v, MergeFork:%v, Euler: %v, Gibbs: %v, Nano: %v, Moran: %v, Planck: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Ramanujan: %v, Niels: %v, MirrorSync: %v, Bruno: %v, Berlin: %v, YOLO v3: %v, CatalystBlock: %v, London: %v, ArrowGlacier: %v, MergeFork:%v, Euler: %v, Gibbs: %v, Nano: %v, Moran: %v, Planck: %v, IBFT: %v, Preportland: %v, Portland: %v, Detroit: %v, Hawaii: %v, Engine: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -368,6 +498,11 @@ func (c *ChainConfig) String() string {
 		c.NanoBlock,
 		c.MoranBlock,
 		c.PlanckBlock,
+		c.IBFTBlock,
+		c.PreportlandBlock,
+		c.PortlandBlock,
+		c.DetroitBlock,
+		c.HawaiiBlock,
 		engine,
 	)
 }
@@ -529,6 +664,46 @@ func (c *ChainConfig) IsPlanck(num *big.Int) bool {
 
 func (c *ChainConfig) IsOnPlanck(num *big.Int) bool {
 	return configNumEqual(c.PlanckBlock, num)
+}
+
+func (c *ChainConfig) IsIBFT(num *big.Int) bool {
+	return isForked(c.IBFTBlock, num)
+}
+
+func (c *ChainConfig) IsOnIBFT(num *big.Int) bool {
+	return configNumEqual(c.IBFTBlock, num)
+}
+
+func (c *ChainConfig) IsPrePortland(num *big.Int) bool {
+	return isForked(c.PreportlandBlock, num)
+}
+
+func (c *ChainConfig) IsOnPrePortland(num *big.Int) bool {
+	return configNumEqual(c.PreportlandBlock, num)
+}
+
+func (c *ChainConfig) IsPortland(num *big.Int) bool {
+	return isForked(c.PortlandBlock, num)
+}
+
+func (c *ChainConfig) IsOnPortland(num *big.Int) bool {
+	return configNumEqual(c.PortlandBlock, num)
+}
+
+func (c *ChainConfig) IsDetorit(num *big.Int) bool {
+	return isForked(c.DetroitBlock, num)
+}
+
+func (c *ChainConfig) IsOnDetorit(num *big.Int) bool {
+	return configNumEqual(c.DetroitBlock, num)
+}
+
+func (c *ChainConfig) IsHawaii(num *big.Int) bool {
+	return isForked(c.HawaiiBlock, num)
+}
+
+func (c *ChainConfig) IsOnHawaii(num *big.Int) bool {
+	return configNumEqual(c.HawaiiBlock, num)
 }
 
 // CheckCompatible checks whether scheduled fork transitions have been imported
@@ -734,6 +909,8 @@ type Rules struct {
 	IsNano                                                  bool
 	IsMoran                                                 bool
 	IsPlanck                                                bool
+	IsIBFT                                                  bool
+	IsHawaii                                                bool
 }
 
 // Rules ensures c's ChainID is not nil.
@@ -758,5 +935,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool) Rules {
 		IsNano:           c.IsNano(num),
 		IsMoran:          c.IsMoran(num),
 		IsPlanck:         c.IsPlanck(num),
+		IsIBFT:           c.IsIBFT(num),
+		IsHawaii:         c.IsHawaii(num),
 	}
 }
