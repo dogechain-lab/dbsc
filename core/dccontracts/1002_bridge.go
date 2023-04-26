@@ -7,6 +7,6 @@ import (
 )
 
 // ByteCodeSha256: adea481c3befc76f0c678b4c33b5046687667360865101426c77c5cf56220cd5
-// HexByteCodeSha256: 11467e94f0ce4b6ad37e2d784f24bfca3a27fd3dc256384ffdd0528215bd6fc5
+// BinaryByteCodeSha256: 11467e94f0ce4b6ad37e2d784f24bfca3a27fd3dc256384ffdd0528215bd6fc5
 //go:embed hex/1002_bridge.hex
 var DCBridgeContractByteCode []byte

@@ -7,6 +7,6 @@ import (
 )
 
 // ByteCodeSha256: b9ac79012af2a83bd31a50710e53f82ce771892e79d68840adc1feb3cc103a0a
-// HexByteCodeSha256: af607b86119d3699fb48c26cc4f83b1995a3fe3ed50f1dbeecd020e91d2c521a
+// BinaryByteCodeSha256: af607b86119d3699fb48c26cc4f83b1995a3fe3ed50f1dbeecd020e91d2c521a
 //go:embed hex/1003_vault.hex
 var DCVaultContractByteCode []byte

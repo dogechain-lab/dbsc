@@ -74,14 +74,14 @@ func sha256sum(data []byte) string {
 	return hex.EncodeToString(shasum[:])
 }
 
-func generateByteCode(name, output, bytecodeSha256, hexSha256 string) []byte {
+func generateByteCode(name, output, bytecodeSha256, binarySha256 string) []byte {
 	var code bytes.Buffer
 	fmt.Fprintf(&code, "package dccontracts\n\n")
 	fmt.Fprintf(&code, "import (\n")
 	fmt.Fprintf(&code, "\t_ \"embed\"\n")
 	fmt.Fprintf(&code, ")\n\n")
 	fmt.Fprintf(&code, "// ByteCodeSha256: %s\n", bytecodeSha256)
-	fmt.Fprintf(&code, "// HexByteCodeSha256: %s\n", hexSha256)
+	fmt.Fprintf(&code, "// BinaryByteCodeSha256: %s\n", binarySha256)
 	fmt.Fprintf(&code, "//go:embed hex/%s\n", output)
 	fmt.Fprintf(&code, "var %s []byte\n", name)
 	return code.Bytes()

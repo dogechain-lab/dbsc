@@ -7,6 +7,6 @@ import (
 )
 
 // ByteCodeSha256: 2a95cf8938e05ee303bbf2c5921f218a7ee227a1228a967322a1cd6688c6c362
-// HexByteCodeSha256: 72ed4149651787738b3c392342043381b5a4aa746d4b7fbf6af60289b474631b
+// BinaryByteCodeSha256: 72ed4149651787738b3c392342043381b5a4aa746d4b7fbf6af60289b474631b
 //go:embed hex/1001_validator_set.hex
 var DCValidatorSetContractByteCode []byte

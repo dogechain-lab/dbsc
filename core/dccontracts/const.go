@@ -1,9 +1,5 @@
 package dccontracts
 
-import (
-	_ "embed"
-)
-
 const (
 	// Dogechain genesis contracts
 	DCValidatorSetContract = "0x0000000000000000000000000000000000001001"
