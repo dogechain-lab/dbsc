@@ -30,33 +30,43 @@ const (
 
 func TestOverflow(t *testing.T) {
 	for i, test := range []struct {
-		x        uint64
-		y        uint64
-		overflow bool
-		op       operation
+		x         uint64
+		y         uint64
+		expectVal uint64
+		overflow  bool
+		op        operation
 	}{
 		// add operations
-		{MaxUint64, 1, true, add},
-		{MaxUint64 - 1, 1, false, add},
+		{MaxUint64, 1, 0, true, add},
+		{MaxUint64 - 1, 1, MaxUint64, false, add},
 
 		// sub operations
-		{0, 1, true, sub},
-		{0, 0, false, sub},
+		{0, 1, MaxUint64, true, sub},
+		{0, 0, 0, false, sub},
 
 		// mul operations
-		{0, 0, false, mul},
-		{10, 10, false, mul},
-		{MaxUint64, 2, true, mul},
-		{MaxUint64, 1, false, mul},
+		{0, 0, 0, false, mul},
+		{10, 10, 100, false, mul},
+		{MaxUint64, 0, 0, false, mul},
+		{MaxUint64, 1, MaxUint64, false, mul},
+		{MaxUint64, 2, MaxUint64 - 1, true, mul},
+		{MaxUint64, MaxUint64, 1, true, mul},
 	} {
-		var overflows bool
+		var (
+			v         uint64
+			overflows bool
+		)
 		switch test.op {
 		case sub:
-			_, overflows = SafeSub(test.x, test.y)
+			v, overflows = SafeSub(test.x, test.y)
 		case add:
-			_, overflows = SafeAdd(test.x, test.y)
+			v, overflows = SafeAdd(test.x, test.y)
 		case mul:
-			_, overflows = SafeMul(test.x, test.y)
+			v, overflows = SafeMul(test.x, test.y)
+		}
+
+		if test.expectVal != v {
+			t.Errorf("%d failed. Expected test to be %v, got %v", i, test.expectVal, v)
 		}
 
 		if test.overflow != overflows {
