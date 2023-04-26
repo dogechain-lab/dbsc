@@ -157,16 +157,16 @@ func genesisGen(c *cli.Context) error {
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
-		IBFTBlock:           nil, // this is dogechain v1 network block, new network should not use this
+		IBFTBlock:           big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
-		PreportlandBlock:    big.NewInt(0),
-		PortlandBlock:       big.NewInt(0),
-		DetroitBlock:        big.NewInt(0),
+		PreportlandBlock:    big.NewInt(1), // dogechain system contract upgrade
+		PortlandBlock:       big.NewInt(2),
+		DetroitBlock:        big.NewInt(3),
 		// TODO: Add hawaii hard fork
-		// HawaiiBlock:      big.NewInt(0),
+		// HawaiiBlock:      big.NewInt(4),
 		IBFT: &params.IBFTConfig{
 			EpochSize: c.GlobalUint64(epochSizeFlag.Name),
 			Type:      params.IBFTPoS,

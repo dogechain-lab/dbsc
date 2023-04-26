@@ -2,7 +2,6 @@ package dccontracts
 
 import (
 	_ "embed"
-	"encoding/hex"
 )
 
 const (
@@ -12,36 +11,13 @@ const (
 	DCVaultContract        = "0x0000000000000000000000000000000000001003"
 )
 
-//go:embed bytecode/00001001-ValidatorSet.bin
-var _validatorSetContractByteCode string
+//go:generate go run codeembed/main.go -name DCValidatorSetContractByteCode  -output 1001_validator_set.go -input bytecode/1001-ValidatorSet.bin
+//go:generate go run codeembed/main.go -name DCBridgeContractByteCode        -output 1002_bridge.go        -input bytecode/1002-Bridge.bin
+//go:generate go run codeembed/main.go -name DCVaultContractByteCode         -output 1003_vault.go         -input bytecode/1003-Vault.bin
 
-var DCValidatorSetContractByteCode []byte
+// Portland hard fork
+//go:generate go run codeembed/main.go -name DCBridgeContractPortlandByteCode -output 1002_bridge_portland.go -input bytecode/1002-Bridge-Portland.bin
 
-//go:embed bytecode/00001002-Bridge.bin
-var _bridgeContractByteCode string
-
-var DCBridgeContractByteCode []byte
-
-//go:embed bytecode/00001003-Vault.bin
-var _vaultContractByteCode string
-
-var DCVaultContractByteCode []byte
-
-func init() {
-	var err error
-
-	DCValidatorSetContractByteCode, err = hex.DecodeString(_validatorSetContractByteCode)
-	if err != nil {
-		panic("validatorSet contract bytecode error")
-	}
-
-	DCBridgeContractByteCode, err = hex.DecodeString(_bridgeContractByteCode)
-	if err != nil {
-		panic("bridge contract bytecode error")
-	}
-
-	DCVaultContractByteCode, err = hex.DecodeString(_vaultContractByteCode)
-	if err != nil {
-		panic("vault contract bytecode error")
-	}
-}
+// Detroit hard fork
+//go:generate go run codeembed/main.go -name DCValidatorSetContractDetroitByteCode -output 1001_validatorset_detroit.go -input bytecode/1001-ValidatorSet-Detroit.bin
+//go:generate go run codeembed/main.go -name DCBridgeContractDetroitByteCode       -output 1002_bridge_detroit.go       -input bytecode/1002-Bridge-Detroit.bin

@@ -69,7 +69,7 @@ func init() {
 			{
 				ContractAddr: common.HexToAddress(DCBridgeContract),
 				CommitURL:    "https://github.com/dogechain-lab/contracts/commit/bcaad0a8a050743855d294d58dac73f06fdc9585",
-				Code:         DCBridgeContractByteCode,
+				Code:         DCBridgeContractPortlandByteCode,
 			},
 		},
 	}
@@ -84,7 +84,7 @@ func init() {
 			{
 				ContractAddr: common.HexToAddress(DCValidatorSetContract),
 				CommitURL:    "https://github.com/dogechain-lab/contracts/commit/675c539c5c06b85e3a9ddc060f14e8d12c97a22e",
-				Code:         DCValidatorSetContractByteCode,
+				Code:         DCValidatorSetContractDetroitByteCode,
 				DefaultInitStorage: map[common.Hash]common.Hash{
 					common.HexToHash("0x000000000000000000000000000000000000000a"): common.HexToHash("0xde0b6b3a7640000"),     // rewardPerBlock
 					common.HexToHash("0x000000000000000000000000000000000000000b"): common.HexToHash("0x19"),                  // activeValidatorsLength
@@ -100,7 +100,7 @@ func init() {
 			{
 				ContractAddr: common.HexToAddress(DCBridgeContract),
 				CommitURL:    "https://github.com/dogechain-lab/contracts/commit/675c539c5c06b85e3a9ddc060f14e8d12c97a22e",
-				Code:         DCBridgeContractByteCode,
+				Code:         DCBridgeContractDetroitByteCode,
 			},
 		},
 	}
