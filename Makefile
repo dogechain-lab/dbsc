@@ -37,6 +37,9 @@ geth-linux-arm64:
 all:
 	$(GORUN) build/ci.go install
 
+all-static:
+	$(GORUN) build/ci.go install -static
+
 android:
 	$(GORUN) build/ci.go aar --local
 	@echo "Done building."
