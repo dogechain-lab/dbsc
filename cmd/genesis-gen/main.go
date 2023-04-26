@@ -22,7 +22,6 @@ import (
 	"math/big"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/ethereum/go-ethereum/consensus/ibft"
 	"github.com/ethereum/go-ethereum/core/dccontracts"
@@ -50,6 +49,11 @@ var (
 		Name:  "chain-id",
 		Usage: "Chain ID of the genesis block",
 		Value: 668,
+	}
+	timestampFlag = cli.Uint64Flag{
+		Name:  "timestamp",
+		Usage: "Timestamp of the genesis block",
+		Value: 0,
 	}
 	epochSizeFlag = cli.Uint64Flag{
 		Name:  "epoch-size",
@@ -101,6 +105,7 @@ func init() {
 	app = flags.NewApp(gitCommit, gitDate, "Generate genesis block for DBSC")
 	app.Flags = []cli.Flag{
 		chainIDFlag,
+		timestampFlag,
 		epochSizeFlag,
 		gasLimitFlag,
 		gasUsedFlag,
@@ -176,7 +181,7 @@ func genesisGen(c *cli.Context) error {
 	genesis := &core.Genesis{
 		Config:     chainConfig,
 		Nonce:      0,
-		Timestamp:  uint64(time.Now().Unix()),
+		Timestamp:  c.GlobalUint64(timestampFlag.Name),
 		GasLimit:   c.GlobalUint64(gasLimitFlag.Name),
 		GasUsed:    c.GlobalUint64(gasUsedFlag.Name),
 		Difficulty: big.NewInt(1),
