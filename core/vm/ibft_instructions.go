@@ -1,7 +1,5 @@
 package vm
 
-import "github.com/holiman/uint256"
-
 func ibftOpCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	if interpreter.readOnly {
 		return nil, ErrWriteProtection
@@ -65,20 +63,9 @@ func ibftOpMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	return nil, nil
 }
 
-// isMemoryParamOverflow returns whether parameter overflow uint64
-//
-// should not extend overflow uint64
-func isMemoryParamOverflow(mstart, val *uint256.Int) bool {
-	return !mstart.IsUint64() || !val.IsUint64()
-}
-
 func ibftOpMstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	// pop value of the stack
 	mStart, val := scope.Stack.pop(), scope.Stack.pop()
-	if !isMemoryParamOverflow(&mStart, &val) {
-		return nil, ErrGasUintOverflow
-	}
-
 	scope.Memory.Set32(mStart.Uint64(), &val)
 	return nil, nil
 }
