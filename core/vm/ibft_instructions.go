@@ -69,7 +69,7 @@ func ibftOpMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 //
 // should not extend overflow uint64
 func isMemoryParamOverflow(mstart, val *uint256.Int) bool {
-	return !mstart.IsUint64() || val.IsUint64()
+	return !mstart.IsUint64() || !val.IsUint64()
 }
 
 func ibftOpMstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
