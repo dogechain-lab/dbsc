@@ -813,7 +813,7 @@ func newIBFTInstructionSet() JumpTable {
 			memorySize:  ibftMemoryLog,
 		},
 		CREATE: {
-			execute:     opCreate,
+			execute:     ibftOpCreate,
 			constantGas: params.CreateGas,
 			dynamicGas:  ibftGasCreate,
 			minStack:    minStack(3, 1),

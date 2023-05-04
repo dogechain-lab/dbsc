@@ -85,7 +85,7 @@ func ibftMemoryDynamicWordGas(stackpos int, gasPerWord uint64) gasFunc {
 			return 0, err
 		}
 		// And gas for copying data, charged per word at param.CopyGas
-		// Length is aready verified.
+		// Length is already verified.
 		words := stack.Back(stackpos).Uint64()
 		// Don't care about overflow here may cause its
 		// strange behavior.
