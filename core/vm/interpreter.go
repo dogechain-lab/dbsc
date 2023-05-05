@@ -243,6 +243,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			if err != nil || !contract.UseGas(dynamicCost) {
 				return nil, ErrOutOfGas
 			}
+			// Resize the memory
 			if memorySize > 0 {
 				mem.Resize(memorySize)
 			}

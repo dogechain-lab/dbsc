@@ -14,7 +14,6 @@ var (
 	ibftGasMLoad   = ibftPureMemoryGasCost
 	ibftGasMStore8 = ibftPureMemoryGasCost
 	ibftGasMStore  = ibftPureMemoryGasCost
-	ibftGasCreate  = ibftPureMemoryGasCost
 )
 
 // copy instructions
@@ -29,6 +28,18 @@ var (
 var (
 	ibftGasKeccak256 = ibftMemoryDynamicWordGas(1, params.Keccak256WordGas)
 )
+
+// special instructions whose gas cost are calculated within execution
+var (
+	ibftGasCreate  = ibftEmptyMemoryGasCost
+	ibftGasCreate2 = ibftEmptyMemoryGasCost
+)
+
+// ibftEmptyMemoryGasCost does nothing and its calculation and memory sizing
+// take place in the execution
+func ibftEmptyMemoryGasCost(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
+	return 0, nil
+}
 
 // ibftMemoryGasCost calculates the quadratic gas for memory expansion. It does
 // so only for the memory region that is expanded, not the total memory.

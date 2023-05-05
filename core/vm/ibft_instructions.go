@@ -1,8 +1,13 @@
 package vm
 
 import (
+	"errors"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
 
@@ -11,81 +16,153 @@ var (
 	ibftOpCreate2 = ibftOpCreateImpl(CREATE2)
 )
 
+func ibftGetMemory(scope *ScopeContext, offset, size *uint256.Int) ([]byte, error) {
+	// Short-circuit
+	if size.IsZero() {
+		return nil, nil
+	}
+	// Calculate memory consumption once again, and "swallow" the error
+	memSize, overflow := ibftCalcMemSize64(offset, size)
+	if overflow {
+		return nil, ErrGasUintOverflow
+	}
+	// Memory is expanded in words of 32 bytes. Gas
+	// is also calculated in words.
+	memSize = toWordSize(memSize)
+	memSize *= 32
+	// Extend memory gas cost
+	cost, err := ibftMemoryGasCost(scope.Memory, memSize)
+	if err != nil {
+		return nil, err
+	}
+	// Consume memory gas
+	if !scope.Contract.UseGas(cost) {
+		return nil, ErrOutOfGas
+	}
+	// Resize the memory
+	if memSize > 0 {
+		scope.Memory.Resize(memSize)
+	}
+
+	// Contract code
+	var input = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
+
+	return input, nil
+}
+
+// ibftBuildCreateContract charges memory gas step by step
+func ibftBuildCreateContract(op OpCode, interpreter *EVMInterpreter, scope *ScopeContext) (ret *ibftInnerCreateContract, shouldContinue bool, err error) {
+	var (
+		value           = scope.Stack.pop()
+		offset, size    = scope.Stack.pop(), scope.Stack.pop()
+		salt            uint256.Int
+		currentContract = scope.Contract
+		gas             = scope.Contract.Gas
+	)
+	if op == CREATE2 {
+		salt = scope.Stack.pop()
+	}
+
+	// Get contract code to memory
+	input, getMemoryErr := ibftGetMemory(scope, &offset, &size)
+	if getMemoryErr != nil {
+		log.Warn("get code to memory failed", "err", getMemoryErr)
+		// for outside break
+		return nil, true, getMemoryErr
+	}
+
+	// Assure transfer value
+	//TODO: use uint256.Int instead of converting with toBig()
+	var bigVal = big0
+	if value.Sign() > 0 { // need to transfer value
+		bigVal = value.ToBig()
+		// Checks whether balance is enough to pay value.
+		v := interpreter.evm.StateDB.GetBalance(currentContract.Caller())
+		if v.Cmp(bigVal) < 0 {
+			return nil, false, ErrInsufficientBalance
+		}
+	}
+
+	// Consume sha3 gas cost
+	if op == CREATE2 {
+		words := toWordSize(size.Uint64())
+		if !scope.Contract.UseGas(words * params.Keccak256WordGas) {
+			return nil, true, ErrOutOfGas
+		}
+	}
+
+	// CREATE2 uses by default EIP150
+	if interpreter.evm.chainRules.IsEIP150 || op == CREATE2 {
+		gas -= gas / 64
+	}
+	if !scope.Contract.UseGas(gas) {
+		return nil, true, ErrOutOfGas
+	}
+
+	// reuse size int for stackvalue
+	var addr common.Address
+
+	if op == CREATE2 {
+		// New contract address
+		codeAndHash := &codeAndHash{code: input}
+		addr = crypto.CreateAddress2(currentContract.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
+	} else {
+		addr = crypto.CreateAddress(currentContract.Address(),
+			interpreter.evm.StateDB.GetNonce(scope.Contract.Address()),
+		)
+	}
+
+	return &ibftInnerCreateContract{
+		Code:        input,
+		Type:        op,
+		CodeAddress: addr,
+		Value:       bigVal,
+		Gas:         gas,
+	}, true, nil
+}
+
+type ibftInnerCreateContract struct {
+	Code        []byte
+	Type        OpCode
+	CodeAddress common.Address
+	Value       *big.Int
+	Gas         uint64
+}
+
 func ibftOpCreateImpl(op OpCode) executionFunc {
 	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 		if interpreter.readOnly {
 			return nil, ErrWriteProtection
 		}
 
-		var (
-			value           = scope.Stack.pop()
-			offset, size    = scope.Stack.pop(), scope.Stack.pop()
-			salt            uint256.Int
-			input           = scope.Memory.GetCopy(int64(offset.Uint64()), int64(size.Uint64()))
-			currentContract = scope.Contract
-			gas             = scope.Contract.Gas
-		)
-		if op == CREATE2 {
-			salt = scope.Stack.pop()
+		ret, shouldContinue, buildErr := ibftBuildCreateContract(op, interpreter, scope)
+		if !shouldContinue { // could not go on here
+			var emptyVal uint256.Int
+			scope.Stack.push(&emptyVal)
+			return nil, buildErr
+		}
+		if ret == nil {
+			return nil, buildErr
 		}
 
-		if interpreter.evm.chainRules.IsEIP150 || op == CREATE2 {
-			gas -= gas / 64
-		}
-		// reuse size int for stackvalue
-		stackvalue := size
+		// Create contract
+		res, addr, returnGas, suberr := interpreter.evm.CreateWithOpCode(scope.Contract, &codeAndHash{code: ret.Code}, ret.Gas, ret.Value, ret.CodeAddress, op)
 
-		scope.Contract.UseGas(gas)
-		//TODO: use uint256.Int instead of converting with toBig()
-		var bigVal = big0
-		if value.Sign() > 0 { // need to transfer value
-			bigVal = value.ToBig()
-			// Checks whether balance is enough to pay value.
-			v := interpreter.evm.StateDB.GetBalance(currentContract.Caller())
-			if v.Cmp(bigVal) < 0 {
-				return nil, ErrInsufficientBalance
-			}
-		}
-
-		var (
-			res       []byte
-			addr      common.Address
-			returnGas uint64
-			suberr    error
-		)
-
-		if op == CREATE2 {
-			// New contract address
-			codeAndHash := &codeAndHash{code: input}
-			addr = crypto.CreateAddress2(currentContract.Address(), salt.Bytes32(), codeAndHash.Hash().Bytes())
-			res, addr, returnGas, suberr = interpreter.evm.CreateWithOpCode(scope.Contract, codeAndHash, gas, bigVal, addr, CREATE2)
-			// Push item on the stack based on the returned error.
-			// IBFT use a strange Create2 opcode stack calling sequence, which is not
-			// EVM compatible. So we need to return address even though it failed due
-			// to not enough gas during running the construction.
-			// But we'll make this unknown issue back to normal after the hard fork
-			stackvalue.SetBytes(addr.Bytes())
+		// No matter what happen, we need to set stack
+		var stackvalue uint256.Int
+		if op == CREATE && interpreter.evm.chainRules.IsHomestead && errors.Is(suberr, ErrOutOfGas) {
+			stackvalue.Clear()
+		} else if suberr != nil && !errors.Is(suberr, ErrCodeStoreOutOfGas) {
+			stackvalue.Clear()
 		} else {
-			addr = crypto.CreateAddress(currentContract.Address(),
-				interpreter.evm.StateDB.GetNonce(scope.Contract.Address()),
-			)
-			res, addr, returnGas, suberr = interpreter.evm.CreateWithOpCode(scope.Contract, &codeAndHash{code: input}, gas, bigVal, addr, CREATE)
-			// Push item on the stack based on the returned error. If the ruleset is
-			// homestead we must check for CodeStoreOutOfGasError (homestead only
-			// rule) and treat as an error, if the ruleset is frontier we must
-			// ignore this error and pretend the operation was successful.
-			if interpreter.evm.chainRules.IsHomestead && suberr == ErrCodeStoreOutOfGas {
-				stackvalue.Clear()
-			} else if suberr != nil && suberr != ErrCodeStoreOutOfGas {
-				stackvalue.Clear()
-			} else {
-				stackvalue.SetBytes(addr.Bytes())
-			}
+			// We might get code store out of gas, but still return contract address here.
+			stackvalue.SetBytes(addr.Bytes())
 		}
-
 		scope.Stack.push(&stackvalue)
+		// Refund gas
 		scope.Contract.Gas += returnGas
 
+		// Handle revert error
 		if suberr == ErrExecutionReverted {
 			interpreter.returnData = res // set REVERT data to return data buffer
 			return res, nil
