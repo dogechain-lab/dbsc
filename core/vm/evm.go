@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -534,9 +535,110 @@ func (evm *EVM) Create2(caller ContractRef, code []byte, gas uint64, endowment *
 	return evm.create(caller, codeAndHash, gas, endowment, contractAddr, CREATE2)
 }
 
+// ibftcreate creates a new contract using code as deployment code.
+func (evm *EVM) ibftcreate(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
+	// Depth check execution. Fail if we're trying to execute above the
+	// limit.
+	if evm.depth > int(params.CallCreateDepth) {
+		return nil, common.Address{}, gas, ErrDepth
+	}
+
+	// Increase nonce
+	nonce := evm.StateDB.GetNonce(caller.Address())
+	if nonce+1 < nonce {
+		return nil, common.Address{}, gas, ErrNonceUintOverflow
+	}
+	evm.StateDB.SetNonce(caller.Address(), nonce+1)
+
+	// Ensure there's no existing contract already at the designated address
+	contractHash := evm.StateDB.GetCodeHash(address)
+	if evm.StateDB.GetNonce(address) != 0 || (contractHash != (common.Hash{}) && contractHash != emptyCodeHash) {
+		return nil, common.Address{}, 0, ErrContractAddressCollision
+	}
+
+	// Create a new account on the state
+	snapshot := evm.StateDB.Snapshot()
+
+	// EIP158 already enabled, so we will force creation of the account
+	evm.StateDB.CreateAccount(address)
+	evm.StateDB.SetNonce(address, 1)
+
+	// Assures transfer
+	if !evm.Context.CanTransfer(evm.StateDB, caller.Address(), value) {
+		return nil, common.Address{}, gas, ErrInsufficientBalance
+	}
+	evm.Context.Transfer(evm.StateDB, caller.Address(), address, value)
+
+	// Initialise a new contract and set the code that is to be used by the EVM.
+	// The contract is a scoped environment for this execution context only.
+	contract := NewContract(caller, AccountRef(address), value, gas)
+	contract.SetCodeOptionalHash(&address, codeAndHash)
+
+	if evm.Config.Debug {
+		if evm.depth == 0 {
+			evm.Config.Tracer.CaptureStart(evm, caller.Address(), address, true, codeAndHash.code, gas, value)
+		} else {
+			evm.Config.Tracer.CaptureEnter(typ, caller.Address(), address, codeAndHash.code, gas, value)
+		}
+	}
+
+	start := time.Now()
+
+	ret, err := evm.interpreter.Run(contract, nil, false)
+	// Capture debug information
+	defer func() {
+		if evm.Config.Debug {
+			if evm.depth == 0 {
+				evm.Config.Tracer.CaptureEnd(ret, gas-contract.Gas, time.Since(start), err)
+			} else {
+				evm.Config.Tracer.CaptureExit(ret, gas-contract.Gas, err)
+			}
+		}
+	}()
+
+	// Not reverted error should take all gas here
+	if err != nil && !errors.Is(err, ErrExecutionReverted) {
+		contract.UseGas(contract.Gas)
+	}
+	// Handle error first
+	if err != nil {
+		evm.StateDB.RevertToSnapshot(snapshot)
+		return ret, address, contract.Gas, err
+	}
+
+	// Check whether the max code size has been exceeded, assign err if the case.
+	if evm.chainRules.IsEIP158 && len(ret) > params.MaxCodeSize {
+		evm.StateDB.RevertToSnapshot(snapshot)
+		// for tracing
+		contract.UseGas(contract.Gas)
+		err = ErrMaxCodeSizeExceeded
+		return nil, address, contract.Gas, err
+	}
+
+	// if the contract creation ran successfully and no errors were returned
+	// calculate the gas required to store the code. If the code could not
+	// be stored due to not enough gas set an error and let it be handled
+	// by the error checking condition below.
+	createDataGas := uint64(len(ret)) * params.CreateDataGas
+	if !contract.UseGas(createDataGas) { // Consume the gas required
+		err = ErrCodeStoreOutOfGas
+		ret = nil
+		// Out of gas creating the contract
+		if evm.chainRules.IsHomestead {
+			evm.StateDB.RevertToSnapshot(snapshot)
+			contract.UseGas(contract.Gas)
+		}
+
+		return ret, address, contract.Gas, err
+	}
+
+	evm.StateDB.SetCode(address, ret)
+	return ret, address, contract.Gas, nil
+}
+
 // create creates a new contract using code as deployment code.
 func (evm *EVM) CreateWithOpCode(caller ContractRef, codeAndHash *codeAndHash, gas uint64, value *big.Int, address common.Address, typ OpCode) ([]byte, common.Address, uint64, error) {
-	return evm.create(caller, codeAndHash, gas, value, address, typ)
+	return evm.ibftcreate(caller, codeAndHash, gas, value, address, typ)
 }
 
 // ChainConfig returns the environment's chain configuration
