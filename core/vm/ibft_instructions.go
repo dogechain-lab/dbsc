@@ -16,15 +16,18 @@ var (
 	ibftOpCreate2 = ibftOpCreateImpl(CREATE2)
 )
 
-func ibftGetMemory(scope *ScopeContext, offset, size *uint256.Int) ([]byte, error) {
-	// Short-circuit
-	if size.IsZero() {
-		return nil, nil
-	}
+var (
+	ibftOpCall         = ibftOpCallImpl(CALL)
+	ibftOpCallCode     = ibftOpCallImpl(CALLCODE)
+	ibftOpDelegateCall = ibftOpCallImpl(DELEGATECALL)
+	ibftOpStaticCall   = ibftOpCallImpl(STATICCALL)
+)
+
+func ibftExtendMemory(scope *ScopeContext, offset, size *uint256.Int) error {
 	// Calculate memory consumption once again, and "swallow" the error
 	memSize, overflow := ibftCalcMemSize64(offset, size)
 	if overflow {
-		return nil, ErrGasUintOverflow
+		return ErrGasUintOverflow
 	}
 	// Memory is expanded in words of 32 bytes. Gas
 	// is also calculated in words.
@@ -33,15 +36,28 @@ func ibftGetMemory(scope *ScopeContext, offset, size *uint256.Int) ([]byte, erro
 	// Extend memory gas cost
 	cost, err := ibftMemoryGasCost(scope.Memory, memSize)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// Consume memory gas
 	if !scope.Contract.UseGas(cost) {
-		return nil, ErrOutOfGas
+		return ErrOutOfGas
 	}
 	// Resize the memory
 	if memSize > 0 {
 		scope.Memory.Resize(memSize)
+	}
+
+	return nil
+}
+
+func ibftGetMemory(scope *ScopeContext, offset, size *uint256.Int) ([]byte, error) {
+	// Short-circuit
+	if size.IsZero() {
+		return nil, nil
+	}
+
+	if err := ibftExtendMemory(scope, offset, size); err != nil {
+		return nil, err
 	}
 
 	// Contract code
@@ -139,6 +155,10 @@ func ibftOpCreateImpl(op OpCode) executionFunc {
 		if !shouldContinue { // could not go on here
 			var emptyVal uint256.Int
 			scope.Stack.push(&emptyVal)
+			// Refund gas if necessary
+			if ret != nil {
+				scope.Contract.Gas += ret.Gas
+			}
 			return nil, buildErr
 		}
 		if ret == nil {
@@ -194,4 +214,190 @@ func ibftOpMstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	mStart, val := scope.Stack.pop(), scope.Stack.pop()
 	scope.Memory.Set32(mStart.Uint64(), &val)
 	return nil, nil
+}
+
+// ibftBuildCallContract charges memory gas step by step
+func ibftBuildCallContract(op OpCode, interpreter *EVMInterpreter, scope *ScopeContext) (ret *ibftInnerCallContract, writeEmptyStackWhenFail bool, err error) {
+	var (
+		initialGas = scope.Stack.pop()
+		rawAddr    = scope.Stack.pop()
+		addr       = common.Address(rawAddr.Bytes20())
+	)
+
+	var value *big.Int
+	if op == CALL || op == CALLCODE {
+		v := scope.Stack.pop()
+		value = v.ToBig()
+	}
+
+	// input range
+	inOffset, inSize := scope.Stack.pop(), scope.Stack.pop()
+	// output range
+	outOffset, outSize := scope.Stack.pop(), scope.Stack.pop()
+
+	// Get contract code to memory
+	input, getMemoryErr := ibftGetMemory(scope, &inOffset, &inSize)
+	if getMemoryErr != nil {
+		log.Warn("get code to memory failed", "err", getMemoryErr)
+		// for outside break
+		return nil, writeEmptyStackWhenFail, getMemoryErr
+	}
+
+	// Check if the memory return offsets are out of bounds
+	if err := ibftExtendMemory(scope, &outOffset, &outSize); err != nil {
+		return nil, writeEmptyStackWhenFail, err
+	}
+
+	var gasCost uint64
+	if interpreter.evm.chainRules.IsEIP150 {
+		gasCost = params.CallGasEIP150
+	} else {
+		gasCost = params.CallGasFrontier
+	}
+
+	needTransferValue := (op == CALL || op == CALLCODE) && value != nil && value.Sign() != 0
+
+	if op == CALL {
+		if interpreter.evm.chainRules.IsEIP158 {
+			if needTransferValue && interpreter.evm.StateDB.Empty(addr) {
+				gasCost += params.CallNewAccountGas
+			}
+		} else if !interpreter.evm.StateDB.Exist(addr) { // It shouldn't be, but just in case
+			gasCost += params.CallNewAccountGas
+		}
+	}
+
+	if needTransferValue {
+		gasCost += params.CallValueTransferGas
+	}
+
+	var (
+		gas uint64
+		ok  = initialGas.IsUint64()
+	)
+
+	if interpreter.evm.chainRules.IsEIP150 {
+		availableGas := scope.Contract.Gas - gasCost
+		availableGas = availableGas - availableGas/64
+
+		if !ok || availableGas < initialGas.Uint64() {
+			gas = availableGas
+		} else {
+			gas = initialGas.Uint64()
+		}
+	} else { // It shouldn't be, but just in case.
+		if !ok {
+			return nil, writeEmptyStackWhenFail, ErrOutOfGas
+		}
+		// use all of it
+		gas = initialGas.Uint64()
+	}
+
+	gasCost += gas
+
+	if !scope.Contract.UseGas(gasCost) {
+		return nil, writeEmptyStackWhenFail, ErrOutOfGas
+	}
+
+	if needTransferValue {
+		gas += params.CallStipend
+	}
+
+	parent := scope.Contract
+
+	contract := &ibftInnerCallContract{
+		Type:    op,
+		Origin:  parent.Caller(),
+		Caller:  parent.Address(),
+		Address: addr,
+		Value:   value,
+		Gas:     gas,
+		Code:    interpreter.evm.StateDB.GetCode(addr),
+		Input:   input,
+	}
+
+	if op == STATICCALL || interpreter.readOnly {
+		contract.ReadOnly = true
+	}
+
+	if op == CALLCODE || op == DELEGATECALL {
+		contract.Address = parent.Address()
+		if op == DELEGATECALL {
+			contract.Value = parent.Value()
+			contract.Caller = parent.Caller()
+		}
+	}
+
+	if needTransferValue {
+		if interpreter.evm.StateDB.GetBalance(scope.Contract.Address()).Cmp(value) < 0 {
+			writeEmptyStackWhenFail = true
+			return contract, writeEmptyStackWhenFail, ErrInsufficientBalance
+		}
+	}
+
+	contract.OutputOffset = outOffset.Uint64()
+	contract.OutputSize = outSize.Uint64()
+
+	return contract, writeEmptyStackWhenFail, nil
+}
+
+type ibftInnerCallContract struct {
+	Type         OpCode
+	Origin       common.Address // origin address
+	Caller       common.Address // from address
+	Address      common.Address // to address
+	Value        *big.Int
+	Gas          uint64
+	Code         []byte
+	Input        []byte
+	ReadOnly     bool
+	OutputOffset uint64
+	OutputSize   uint64
+}
+
+func ibftOpCallImpl(op OpCode) executionFunc {
+	return func(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+		if op == CALL && interpreter.readOnly {
+			if val := scope.Stack.Back(2); val.Sign() > 0 {
+				return nil, ErrWriteProtection
+			}
+		}
+
+		buildRet, writeEmptyStackWhenFail, buildErr := ibftBuildCallContract(op, interpreter, scope)
+		if buildErr != nil && writeEmptyStackWhenFail {
+			// Push empty value back to stack
+			var emptyVal uint256.Int
+			scope.Stack.push(&emptyVal)
+			// Refund gas if necessary
+			if buildRet != nil {
+				scope.Contract.Gas += buildRet.Gas
+			}
+			return nil, buildErr
+		}
+		if buildRet == nil {
+			return nil, buildErr
+		}
+
+		var temp uint256.Int
+		ret, returnGas, err := interpreter.evm.Callx(op, AccountRef(buildRet.Caller), buildRet.Address, buildRet.Code, buildRet.Input, buildRet.Gas, buildRet.Value)
+		// Set results back to stack
+		if err != nil {
+			temp.Clear()
+		} else {
+			temp.SetOne()
+		}
+		scope.Stack.push(&temp)
+
+		// Set reverted value
+		if err == nil || errors.Is(err, ErrExecutionReverted) {
+			ret = common.CopyBytes(ret) // replace with new copy
+			scope.Memory.Set(buildRet.OutputOffset, buildRet.OutputSize, ret)
+		}
+
+		// Refund gas
+		scope.Contract.Gas += returnGas
+		// Set return data
+		interpreter.returnData = ret
+		return ret, nil
+	}
 }
