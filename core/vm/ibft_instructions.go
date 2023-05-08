@@ -196,7 +196,7 @@ func ibftOpMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	// Pop element to consume
 	offset := scope.Stack.pop()
 	size := uint256.NewInt(32)
-
+	// Extend memory if neccessary
 	value, err := ibftGetMemory(scope, &offset, size)
 	if err != nil {
 		return nil, err
@@ -212,8 +212,9 @@ func ibftOpMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 func ibftOpMstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	// pop value of the stack
 	mStart, val := scope.Stack.pop(), scope.Stack.pop()
+	size := uint256.NewInt(32)
 	// extend memory
-	err := ibftExtendMemory(scope, &mStart, &val)
+	err := ibftExtendMemory(scope, &mStart, size)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +225,8 @@ func ibftOpMstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 
 func ibftOpMstore8(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	off, val := scope.Stack.pop(), scope.Stack.pop()
-	err := ibftExtendMemory(scope, &off, &val)
+	size := uint256.NewInt(1)
+	err := ibftExtendMemory(scope, &off, size)
 	if err != nil {
 		return nil, err
 	}
