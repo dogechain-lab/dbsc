@@ -58,68 +58,8 @@ func ibftMemoryExtCodeCopy(stack *Stack) (uint64, bool) {
 	return ibftCalcMemSize64(stack.Back(1), stack.Back(3))
 }
 
-func ibftMemoryMLoad(stack *Stack) (uint64, bool) {
-	return ibftCalcMemSize64WithUint(stack.Back(0), 32)
-}
-
-func ibftMemoryMStore8(stack *Stack) (uint64, bool) {
-	return ibftCalcMemSize64WithUint(stack.Back(0), 1)
-}
-
-func ibftMemoryMStore(stack *Stack) (uint64, bool) {
-	return ibftCalcMemSize64WithUint(stack.Back(0), 32)
-}
-
-func ibftMemoryCreate(stack *Stack) (uint64, bool) {
-	return ibftCalcMemSize64(stack.Back(1), stack.Back(2))
-}
-
-func ibftMemoryCreate2(stack *Stack) (uint64, bool) {
-	return ibftCalcMemSize64(stack.Back(1), stack.Back(2))
-}
-
-func ibftMemoryCall(stack *Stack) (uint64, bool) {
-	x, overflow := ibftCalcMemSize64(stack.Back(5), stack.Back(6))
-	if overflow {
-		return 0, true
-	}
-	y, overflow := ibftCalcMemSize64(stack.Back(3), stack.Back(4))
-	if overflow {
-		return 0, true
-	}
-	if x > y {
-		return x, false
-	}
-	return y, false
-}
-func ibftMemoryDelegateCall(stack *Stack) (uint64, bool) {
-	x, overflow := ibftCalcMemSize64(stack.Back(4), stack.Back(5))
-	if overflow {
-		return 0, true
-	}
-	y, overflow := ibftCalcMemSize64(stack.Back(2), stack.Back(3))
-	if overflow {
-		return 0, true
-	}
-	if x > y {
-		return x, false
-	}
-	return y, false
-}
-
-func ibftMemoryStaticCall(stack *Stack) (uint64, bool) {
-	x, overflow := ibftCalcMemSize64(stack.Back(4), stack.Back(5))
-	if overflow {
-		return 0, true
-	}
-	y, overflow := ibftCalcMemSize64(stack.Back(2), stack.Back(3))
-	if overflow {
-		return 0, true
-	}
-	if x > y {
-		return x, false
-	}
-	return y, false
+func ibftEmptyMemorySize(stack *Stack) (uint64, bool) {
+	return 0, true
 }
 
 func ibftMemoryReturn(stack *Stack) (uint64, bool) {

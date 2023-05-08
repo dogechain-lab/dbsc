@@ -70,6 +70,8 @@ type EVMInterpreter struct {
 
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
+
+	readDynamicGasAfter bool // Dyanmic gas are calculated and consumed within execution, get gas afterwards
 }
 
 // NewEVMInterpreter returns a new instance of the Interpreter.
@@ -123,6 +125,8 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 	evmInterpreter.cfg = cfg
 	evmInterpreter.readOnly = false
 	evmInterpreter.returnData = nil
+	// Read gas after execution only if it is an ibft block
+	evmInterpreter.readDynamicGasAfter = evm.chainRules.IsIBFT && !evm.chainRules.IsHawaii
 	return evmInterpreter
 }
 
@@ -169,10 +173,11 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		pc   = uint64(0) // program counter
 		cost uint64
 		// copies used by tracer
-		pcCopy  uint64 // needed for the deferred EVMLogger
-		gasCopy uint64 // for EVMLogger to log gas remaining before execution
-		logged  bool   // deferred EVMLogger should ignore already logged steps
-		res     []byte // result of the opcode execution function
+		pcCopy              uint64 // needed for the deferred EVMLogger
+		gasCopy             uint64 // for EVMLogger to log gas remaining before execution
+		logged              bool   // deferred EVMLogger should ignore already logged steps
+		res                 []byte // result of the opcode execution function
+		readDynamicGasAfter bool   // logger should read gas after execution or not
 	)
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
@@ -248,12 +253,29 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 				mem.Resize(memorySize)
 			}
 		}
-		if in.cfg.Debug {
+		// Check whether we should capture the state afterwards
+		if in.cfg.Debug && in.readDynamicGasAfter {
+			switch op {
+			case CREATE, CREATE2, CALL, CALLCODE, DELEGATECALL, STATICCALL, MLOAD, MSTORE, MSTORE8:
+				readDynamicGasAfter = true
+			}
+		}
+		// Capture state before execution
+		if in.cfg.Debug && !readDynamicGasAfter {
 			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 			logged = true
 		}
+
 		// execute the operation
 		res, err = operation.execute(&pc, in, callContext)
+
+		// Capture state after execution
+		if in.cfg.Debug && readDynamicGasAfter {
+			cost = gasCopy - callContext.Contract.Gas
+			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+			logged = true
+		}
+		// Halt when error is returned
 		if err != nil {
 			break
 		}
