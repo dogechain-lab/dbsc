@@ -196,7 +196,7 @@ func ibftOpMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 	// Pop element to consume
 	offset := scope.Stack.pop()
 	size := uint256.NewInt(32)
-	// Extend memory if neccessary
+	// Extend memory if necessary
 	value, err := ibftGetMemory(scope, &offset, size)
 	if err != nil {
 		return nil, err
