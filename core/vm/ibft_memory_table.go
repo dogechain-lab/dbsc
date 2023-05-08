@@ -59,7 +59,7 @@ func ibftMemoryExtCodeCopy(stack *Stack) (uint64, bool) {
 }
 
 func ibftEmptyMemorySize(stack *Stack) (uint64, bool) {
-	return 0, true
+	return 0, false
 }
 
 func ibftMemoryReturn(stack *Stack) (uint64, bool) {
