@@ -426,3 +426,40 @@ func (ma *MixedcaseAddress) ValidChecksum() bool {
 func (ma *MixedcaseAddress) Original() string {
 	return ma.original
 }
+
+// Storage update status
+//
+// This is used only in ibft blocks
+type StorageStatus int
+
+const (
+	// StorageUnchanged if the data has not changed
+	StorageUnchanged StorageStatus = iota
+	// StorageModified if the value has been modified
+	StorageModified
+	// StorageModifiedAgain if the value has been modified before in the txn
+	StorageModifiedAgain
+	// StorageAdded if this is a new entry in the storage
+	StorageAdded
+	// StorageDeleted if the storage was deleted
+	StorageDeleted
+	// StorageReadFailed if the storage read failed
+	StorageReadFailed
+)
+
+func (s StorageStatus) String() string {
+	switch s {
+	case StorageUnchanged:
+		return "StorageUnchanged"
+	case StorageModified:
+		return "StorageModified"
+	case StorageModifiedAgain:
+		return "StorageModifiedAgain"
+	case StorageAdded:
+		return "StorageAdded"
+	case StorageDeleted:
+		return "StorageDeleted"
+	default:
+		panic("BUG: storage status not found")
+	}
+}

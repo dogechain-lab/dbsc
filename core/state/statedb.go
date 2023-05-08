@@ -600,6 +600,48 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 	}
 }
 
+func (s *StateDB) SetStorageStatus(addr common.Address, key, value common.Hash) common.StorageStatus {
+	oldValue := s.GetState(addr, key)
+	if oldValue == value {
+		return common.StorageUnchanged
+	}
+
+	current := oldValue                            // current - storage dirtied by previous lines of this contract
+	original := s.GetAlreadyStoredState(addr, key) // storage slot before this transaction started
+	// store/delete value
+	s.SetState(addr, key, value)
+
+	if original == current {
+		if original == (common.Hash{}) { // create slot (2.1.1)
+			return common.StorageAdded
+		}
+		if value == (common.Hash{}) { // delete slot (2.1.2b)
+			s.AddRefund(15000)
+			return common.StorageDeleted
+		}
+		return common.StorageModified
+	}
+
+	if original != (common.Hash{}) { // Storage slot was populated before this transaction started
+		if current == (common.Hash{}) { // recreate slot (2.2.1.1)
+			s.SubRefund(15000)
+		} else if value == (common.Hash{}) { // delete slot (2.2.1.2)
+			s.AddRefund(15000)
+		}
+	}
+
+	if original == value {
+		if original == (common.Hash{}) { // reset to original nonexistent slot (2.2.2.1)
+			// Storage was used as memory (allocation and deallocation occurred within the same contract)
+			s.AddRefund(19200)
+		} else { // reset to original existing slot (2.2.2.2)
+			s.AddRefund(4200)
+		}
+	}
+
+	return common.StorageModifiedAgain
+}
+
 // SetStorage replaces the entire storage for the specified account with given
 // storage. This function should only be used for debugging.
 func (s *StateDB) SetStorage(addr common.Address, storage map[common.Hash]common.Hash) {

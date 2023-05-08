@@ -232,6 +232,52 @@ func ibftOpMstore8(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext)
 	return nil, nil
 }
 
+func ibftOpSload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	loc := scope.Stack.peek()
+	hash := common.Hash(loc.Bytes32())
+	val := interpreter.evm.StateDB.GetState(scope.Contract.Address(), hash)
+	loc.SetBytes(val.Bytes())
+	return nil, nil
+}
+
+func ibftOpSstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	if interpreter.readOnly {
+		return nil, ErrWriteProtection
+	}
+
+	// If we fail the minimum gas availability invariant, fail (0)
+	if scope.Contract.Gas <= params.SstoreSentryGasEIP2200 {
+		return nil, errors.New("not enough gas for reentrancy sentry")
+	}
+	// Gas sentry honoured, do the actual gas calculation based on the stored value
+	var (
+		x, y       = scope.Stack.pop(), scope.Stack.pop()
+		key, value = common.Hash(x.Bytes32()), common.Hash(y.Bytes32())
+		cost       = uint64(0)
+	)
+
+	status := interpreter.evm.StateDB.SetStorageStatus(scope.Contract.Address(), key, value)
+
+	switch status {
+	case common.StorageUnchanged:
+		cost = 800
+	case common.StorageModified:
+		cost = 5000
+	case common.StorageModifiedAgain:
+		cost = 800
+	case common.StorageAdded:
+		cost = 20000
+	case common.StorageDeleted:
+		cost = 5000
+	}
+
+	if !scope.Contract.UseGas(cost) {
+		return nil, ErrOutOfGas
+	}
+
+	return nil, nil
+}
+
 // ibftBuildCallContract charges memory gas step by step
 func ibftBuildCallContract(op OpCode, interpreter *EVMInterpreter, scope *ScopeContext) (ret *ibftInnerCallContract, writeEmptyStackWhenFail bool, err error) {
 	var (
