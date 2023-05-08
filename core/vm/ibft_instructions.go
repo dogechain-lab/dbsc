@@ -194,16 +194,16 @@ func ibftOpCreateImpl(op OpCode) executionFunc {
 
 func ibftOpMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	// Pop element to consume
-	v := scope.Stack.pop()
-	offset := int64(v.Uint64())
-	// check memory store
-	value := scope.Memory.GetPtr(offset, 32)
-	// Memory should not be nil here, otherwise we will drop the instruction.
-	if value == nil {
-		return nil, nil
+	offset := scope.Stack.pop()
+	size := uint256.NewInt(32)
+
+	value, err := ibftGetMemory(scope, &offset, size)
+	if err != nil {
+		return nil, err
 	}
+
 	// Push back to stack.
-	vv := v.SetBytes(value)
+	vv := offset.SetBytes(value)
 	scope.Stack.push(vv)
 
 	return nil, nil
@@ -212,7 +212,23 @@ func ibftOpMload(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) (
 func ibftOpMstore(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
 	// pop value of the stack
 	mStart, val := scope.Stack.pop(), scope.Stack.pop()
+	// extend memory
+	err := ibftExtendMemory(scope, &mStart, &val)
+	if err != nil {
+		return nil, err
+	}
+
 	scope.Memory.Set32(mStart.Uint64(), &val)
+	return nil, nil
+}
+
+func ibftOpMstore8(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {
+	off, val := scope.Stack.pop(), scope.Stack.pop()
+	err := ibftExtendMemory(scope, &off, &val)
+	if err != nil {
+		return nil, err
+	}
+	scope.Memory.store[off.Uint64()] = byte(val.Uint64()) & 0xff
 	return nil, nil
 }
 

@@ -9,11 +9,8 @@ import (
 
 // pure moemory cost instructions
 var (
-	ibftGasReturn  = ibftPureMemoryGasCost
-	ibftGasRevert  = ibftPureMemoryGasCost
-	ibftGasMLoad   = ibftPureMemoryGasCost
-	ibftGasMStore8 = ibftPureMemoryGasCost
-	ibftGasMStore  = ibftPureMemoryGasCost
+	ibftGasReturn = ibftPureMemoryGasCost
+	ibftGasRevert = ibftPureMemoryGasCost
 )
 
 // copy instructions
@@ -31,6 +28,9 @@ var (
 
 // special instructions whose gas cost are calculated within execution
 var (
+	ibftGasMLoad   = ibftEmptyMemoryGasCost
+	ibftGasMStore  = ibftEmptyMemoryGasCost
+	ibftGasMStore8 = ibftEmptyMemoryGasCost
 	ibftGasCreate  = ibftEmptyMemoryGasCost
 	ibftGasCreate2 = ibftEmptyMemoryGasCost
 )
