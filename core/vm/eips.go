@@ -109,12 +109,6 @@ func enable2200(jt *JumpTable) {
 	jt[SSTORE].dynamicGas = gasSStoreEIP2200
 }
 
-// enableIBFT2200 applies EIP-2200 in edge version (Rebalance net-metered SSTORE)
-func enableIBFT2200(jt *JumpTable) {
-	jt[SLOAD].constantGas = params.SloadGasEIP2200
-	jt[SSTORE].dynamicGas = ibftGasSStoreEIP2200
-}
-
 // enable2929 enables "EIP-2929: Gas cost increases for state access opcodes"
 // https://eips.ethereum.org/EIPS/eip-2929
 func enable2929(jt *JumpTable) {

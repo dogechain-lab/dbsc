@@ -5,6 +5,7 @@ import "github.com/ethereum/go-ethereum/params"
 // newIBFTInstructionSet returns the ibft instructions
 // that can be executed during the ibft-hawaii phase.
 func newIBFTInstructionSet() JumpTable {
+	// IBFT almost similar with istanbul instruction set
 	tbl := JumpTable{
 		STOP: {
 			execute:     opStop,
@@ -178,7 +179,7 @@ func newIBFTInstructionSet() JumpTable {
 		},
 		BALANCE: {
 			execute:     opBalance,
-			constantGas: params.BalanceGasEIP150,
+			constantGas: params.BalanceGasEIP1884,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
@@ -270,7 +271,7 @@ func newIBFTInstructionSet() JumpTable {
 		},
 		EXTCODEHASH: {
 			execute:     opExtCodeHash,
-			constantGas: params.ExtcodeHashGasConstantinople,
+			constantGas: params.ExtcodeHashGasEIP1884,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
@@ -310,6 +311,18 @@ func newIBFTInstructionSet() JumpTable {
 			minStack:    minStack(0, 1),
 			maxStack:    maxStack(0, 1),
 		},
+		CHAINID: {
+			execute:     opChainID,
+			constantGas: GasQuickStep,
+			minStack:    minStack(0, 1),
+			maxStack:    maxStack(0, 1),
+		},
+		SELFBALANCE: {
+			execute:     opSelfBalance,
+			constantGas: GasFastStep,
+			minStack:    minStack(0, 1),
+			maxStack:    maxStack(0, 1),
+		},
 		POP: {
 			execute:     opPop,
 			constantGas: GasQuickStep,
@@ -333,7 +346,7 @@ func newIBFTInstructionSet() JumpTable {
 			memorySize:  ibftMemoryMStore,
 		},
 		MSTORE8: {
-			execute:     opMstore8,
+			execute:     ibftOpMstore8,
 			constantGas: GasFastestStep,
 			dynamicGas:  ibftGasMStore8,
 			minStack:    minStack(2, 0),
@@ -341,14 +354,14 @@ func newIBFTInstructionSet() JumpTable {
 			memorySize:  ibftMemoryMStore8,
 		},
 		SLOAD: {
-			execute:     opSload,
-			constantGas: params.SloadGasEIP150,
+			execute:     ibftOpSload,
+			constantGas: params.SloadGasEIP2200,
 			minStack:    minStack(1, 1),
 			maxStack:    maxStack(1, 1),
 		},
 		SSTORE: {
-			execute:    opSstore,
-			dynamicGas: gasSStore,
+			execute:    ibftOpSstore,
+			dynamicGas: ibftEmptyMemoryGasCost,
 			minStack:   minStack(2, 0),
 			maxStack:   maxStack(2, 0),
 		},
@@ -888,11 +901,6 @@ func newIBFTInstructionSet() JumpTable {
 			tbl[i] = &operation{execute: opUndefined, maxStack: maxStack(0, 0)}
 		}
 	}
-
-	// IBFT almost similar with istanbul instruction set
-	enable1344(&tbl)     // ChainID opcode - https://eips.ethereum.org/EIPS/eip-1344
-	enable1884(&tbl)     // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
-	enableIBFT2200(&tbl) // Net metered SSTORE
 
 	return validate(tbl)
 }
