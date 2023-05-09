@@ -173,11 +173,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		pc   = uint64(0) // program counter
 		cost uint64
 		// copies used by tracer
-		pcCopy              uint64 // needed for the deferred EVMLogger
-		gasCopy             uint64 // for EVMLogger to log gas remaining before execution
-		logged              bool   // deferred EVMLogger should ignore already logged steps
-		res                 []byte // result of the opcode execution function
-		readDynamicGasAfter bool   // logger should read gas after execution or not
+		pcCopy  uint64 // needed for the deferred EVMLogger
+		gasCopy uint64 // for EVMLogger to log gas remaining before execution
+		logged  bool   // deferred EVMLogger should ignore already logged steps
+		res     []byte // result of the opcode execution function
 	)
 	// Don't move this deferrred function, it's placed before the capturestate-deferred method,
 	// so that it get's executed _after_: the capturestate needs the stacks before
@@ -254,14 +253,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			}
 		}
 		// Check whether we should capture the state afterwards
-		if in.cfg.Debug && in.readDynamicGasAfter {
-			switch op {
-			case CREATE, CREATE2, CALL, CALLCODE, DELEGATECALL, STATICCALL, MLOAD, MSTORE, MSTORE8:
-				readDynamicGasAfter = true
-			}
-		}
 		// Capture state before execution
-		if in.cfg.Debug && !readDynamicGasAfter {
+		if in.cfg.Debug && !in.readDynamicGasAfter {
 			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 			logged = true
 		}
@@ -270,7 +263,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		res, err = operation.execute(&pc, in, callContext)
 
 		// Capture state after execution
-		if in.cfg.Debug && readDynamicGasAfter {
+		if in.cfg.Debug && in.readDynamicGasAfter {
 			cost = gasCopy - callContext.Contract.Gas
 			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
 			logged = true
