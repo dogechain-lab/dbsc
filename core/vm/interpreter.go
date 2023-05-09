@@ -167,6 +167,12 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			Stack:    stack,
 			Contract: contract,
 		}
+		stackBeforeExecution  = newstack() // stack copy used in recording after execution
+		callContextAfterwards = &ScopeContext{
+			Memory:   mem,
+			Stack:    stackBeforeExecution,
+			Contract: contract,
+		}
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
@@ -189,10 +195,17 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 	if in.cfg.Debug {
 		defer func() {
 			if err != nil {
-				if !logged {
-					in.cfg.Tracer.CaptureState(pcCopy, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+				// Switch context if necessary
+				var ctx *ScopeContext
+				if in.readDynamicGasAfter {
+					ctx = callContextAfterwards
 				} else {
-					in.cfg.Tracer.CaptureFault(pcCopy, op, gasCopy, cost, callContext, in.evm.depth, err)
+					ctx = callContext
+				}
+				if !logged {
+					in.cfg.Tracer.CaptureState(pcCopy, op, gasCopy, gasCopy-ctx.Contract.Gas, ctx, in.returnData, in.evm.depth, err)
+				} else {
+					in.cfg.Tracer.CaptureFault(pcCopy, op, gasCopy, cost, ctx, in.evm.depth, err)
 				}
 			}
 		}()
@@ -205,6 +218,10 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		if in.cfg.Debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
+			// For afterwards tracing
+			if in.readDynamicGasAfter {
+				stackBeforeExecution.data = stack.data // read only copy
+			}
 		}
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
@@ -265,7 +282,7 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 		// Capture state after execution
 		if in.cfg.Debug && in.readDynamicGasAfter {
 			cost = gasCopy - callContext.Contract.Gas
-			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, callContext, in.returnData, in.evm.depth, err)
+			in.cfg.Tracer.CaptureState(pc, op, gasCopy, cost, callContextAfterwards, in.returnData, in.evm.depth, err)
 			logged = true
 		}
 		// Halt when error is returned
