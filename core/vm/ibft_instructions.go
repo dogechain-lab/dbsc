@@ -371,7 +371,6 @@ func ibftBuildCallContract(op OpCode, interpreter *EVMInterpreter, scope *ScopeC
 
 	contract := &ibftInnerCallContract{
 		Type:    op,
-		Origin:  parent.Caller(),
 		Caller:  parent.Address(),
 		Address: addr,
 		Value:   value,
@@ -407,7 +406,6 @@ func ibftBuildCallContract(op OpCode, interpreter *EVMInterpreter, scope *ScopeC
 
 type ibftInnerCallContract struct {
 	Type         OpCode
-	Origin       common.Address // origin address
 	Caller       common.Address // from address
 	Address      common.Address // to address
 	Value        *big.Int
