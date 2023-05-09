@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/holiman/uint256"
 )
 
 var EVMInterpreterPool = sync.Pool{
@@ -220,7 +221,8 @@ func (in *EVMInterpreter) Run(contract *Contract, input []byte, readOnly bool) (
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 			// For afterwards tracing
 			if in.readDynamicGasAfter {
-				stackBeforeExecution.data = stack.data // read only copy
+				stackBeforeExecution.data = make([]uint256.Int, 0, len(stack.data))
+				stackBeforeExecution.data = append(stackBeforeExecution.data, stack.data...) // read only copy
 			}
 		}
 		// Get the operation from the jump table and validate the stack to ensure there are
