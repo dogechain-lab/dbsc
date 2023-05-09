@@ -23,15 +23,6 @@ var (
 	ibftGasKeccak256 = ibftMemoryDynamicWordGas(1, params.Keccak256WordGas)
 )
 
-// special instructions whose gas cost are calculated within execution
-var (
-	ibftGasMLoad   = ibftEmptyMemoryGasCost
-	ibftGasMStore  = ibftEmptyMemoryGasCost
-	ibftGasMStore8 = ibftEmptyMemoryGasCost
-	ibftGasCreate  = ibftEmptyMemoryGasCost
-	ibftGasCreate2 = ibftEmptyMemoryGasCost
-)
-
 // ibftEmptyMemoryGasCost does nothing and its calculation and memory sizing
 // take place in the execution
 func ibftEmptyMemoryGasCost(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (uint64, error) {
