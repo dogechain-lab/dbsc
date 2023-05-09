@@ -370,13 +370,14 @@ func ibftBuildCallContract(op OpCode, interpreter *EVMInterpreter, scope *ScopeC
 	parent := scope.Contract
 
 	contract := &ibftInnerCallContract{
-		Type:    op,
-		Caller:  parent.Address(),
-		Address: addr,
-		Value:   value,
-		Gas:     gas,
-		Code:    interpreter.evm.StateDB.GetCode(addr),
-		Input:   input,
+		Type:        op,
+		Caller:      parent.Address(),
+		Address:     addr,
+		CodeAddress: addr,
+		Value:       value,
+		Gas:         gas,
+		Code:        interpreter.evm.StateDB.GetCode(addr),
+		Input:       input,
 	}
 
 	if op == STATICCALL || interpreter.readOnly {
@@ -408,6 +409,7 @@ type ibftInnerCallContract struct {
 	Type         OpCode
 	Caller       common.Address // from address
 	Address      common.Address // to address
+	CodeAddress  common.Address
 	Value        *big.Int
 	Gas          uint64
 	Code         []byte
@@ -441,7 +443,8 @@ func ibftOpCallImpl(op OpCode) executionFunc {
 		}
 
 		var temp uint256.Int
-		ret, returnGas, err := interpreter.evm.Callx(op, AccountRef(buildRet.Caller), buildRet.Address, buildRet.Code, buildRet.Input, buildRet.Gas, buildRet.Value)
+		ret, returnGas, err := interpreter.evm.Callx(scope.Contract, buildRet.Address, buildRet.CodeAddress,
+			buildRet.Code, buildRet.Input, buildRet.Gas, buildRet.Value, op, buildRet.ReadOnly)
 		// Set results back to stack
 		if err != nil {
 			temp.Clear()

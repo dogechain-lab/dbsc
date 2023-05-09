@@ -644,7 +644,16 @@ func (evm *EVM) CreateWithOpCode(caller ContractRef, codeAndHash *codeAndHash, g
 // ChainConfig returns the environment's chain configuration
 func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
-func (evm *EVM) Callx(op OpCode, caller ContractRef, addr common.Address, code, input []byte, gas uint64, value *big.Int) (ret []byte, leftOverGas uint64, err error) {
+func (evm *EVM) Callx(
+	caller ContractRef,
+	addr common.Address,
+	codeAddress common.Address,
+	code, input []byte,
+	gas uint64,
+	value *big.Int,
+	op OpCode,
+	readOnly bool,
+) (ret []byte, leftOverGas uint64, err error) {
 	// Fail if we're trying to execute above the call depth limit
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
@@ -698,8 +707,8 @@ func (evm *EVM) Callx(op OpCode, caller ContractRef, addr common.Address, code, 
 			// If the account has no code, we can abort here
 			// The depth-check is already done, and precompiles handled above
 			contract := NewContract(caller, AccountRef(addrCopy), value, gas)
-			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(addrCopy), code)
-			ret, err = evm.interpreter.Run(contract, input, op == STATICCALL)
+			contract.SetCallCode(&addrCopy, evm.StateDB.GetCodeHash(codeAddress), code)
+			ret, err = evm.interpreter.Run(contract, input, readOnly)
 			gas = contract.Gas
 		}
 	}
