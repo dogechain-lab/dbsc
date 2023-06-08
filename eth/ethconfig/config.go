@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/dc"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/ibft"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
@@ -246,14 +247,18 @@ type Config struct {
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.PublicBlockChainAPI, genesisHash common.Hash) consensus.Engine {
+func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.PublicBlockChainAPI, genesisHash common.Hash) (consensus.Engine, error) {
+	// dogechain consensus
+	if chainConfig.Doge != nil {
+		return dc.New(chainConfig, db, ee)
+	}
 	// ibft
 	if chainConfig.IBFT != nil {
-		return ibft.New(chainConfig, db, ee, genesisHash)
+		return ibft.New(chainConfig, db, ee, genesisHash), nil
 	}
 	// parlia
 	if chainConfig.Parlia != nil {
-		return parlia.New(chainConfig, db, ee, genesisHash)
+		return parlia.New(chainConfig, db, ee, genesisHash), nil
 	}
 	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
@@ -282,5 +287,5 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 		}, notify, noverify)
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}
-	return beacon.New(engine)
+	return beacon.New(engine), nil
 }
