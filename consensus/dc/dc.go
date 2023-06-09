@@ -41,6 +41,7 @@ type DogeChain struct {
 	blockchain   *blockchain.Blockchain
 	consensus    consensus.Consensus
 	stateStorage itrie.Storage
+	state        *WrapDcState
 
 	recentSnaps *lru.ARCCache // Snapshots for recent block to speed up
 	signatures  *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -76,22 +77,23 @@ func New(
 		return nil, err
 	}
 
-	var epochSize uint64
-	if definedEpochSize, ok := genesis.Params.Engine[ibft.KeyEpochSize]; !ok {
-		// No epoch size defined, use the default one
-		epochSize = defaultEpochLength
-	} else {
-		// Epoch size is defined, use the passed in one
-		readSize, ok := definedEpochSize.(float64)
-		if !ok {
-			return nil, errors.New("epochSize invalid type assertion")
-		}
+	var epochSize uint64 = defaultEpochLength
+	if genesis.Params.Engine["ibft"] != nil {
+		if ibftCfg, ok := genesis.Params.Engine["ibft"].(map[string]interface{}); ok {
+			if definedEpochSize, ok := ibftCfg[ibft.KeyEpochSize]; ok {
+				// Epoch size is defined, use the passed in one
+				readSize, ok := definedEpochSize.(float64)
+				if !ok {
+					return nil, errors.New("epochSize invalid type assertion")
+				}
 
-		epochSize = uint64(readSize)
+				epochSize = uint64(readSize)
 
-		if epochSize == 0 {
-			// epoch size should never be zero.
-			epochSize = defaultEpochLength
+				if epochSize == 0 {
+					// epoch size should never be zero.
+					epochSize = defaultEpochLength
+				}
+			}
 		}
 	}
 
@@ -103,10 +105,13 @@ func New(
 		return nil, err
 	}
 
+	dcStateDb := itrie.NewStateDB(stateStorage, logger, itrie.NilMetrics())
+	wrapDcStateDb := NewWrapDcState(dcStateDb)
+
 	blockchain, consensus, err := createBlockchain(
 		logger,
 		genesis,
-		itrie.NewStateDB(stateStorage, logger, itrie.NilMetrics()),
+		wrapDcStateDb,
 		chainConfig.Doge.DataDir,
 	)
 	if err != nil {
@@ -134,6 +139,7 @@ func New(
 		recentSnaps:  recentSnaps,
 		signatures:   signatures,
 		stateStorage: stateStorage,
+		state:        wrapDcStateDb,
 		db:           db,
 		ethAPI:       ethAPI,
 	}, nil

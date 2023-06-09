@@ -1,7 +1,9 @@
 package dc
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -18,13 +20,11 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 
 	"golang.org/x/crypto/sha3"
+
+	dcState "github.com/dogechain-lab/dogechain/state"
 )
 
 var (
-	// errUnknownBlock is returned when the list of validators is requested for a block
-	// that is not part of the local blockchain.
-	errUnknownBlock = errors.New("unknown block")
-
 	// errInvalidBlockTimestamp is returned when it is a future block.
 	errInvalidBlockTimestamp = errors.New("invalid block timestamp")
 
@@ -53,6 +53,8 @@ var (
 
 	// errUnauthorizedValidator is returned if a header is signed by a non-authorized entity.
 	errUnauthorizedValidator = errors.New("unauthorized validator")
+
+	errNotSupported = errors.New("not supported")
 )
 
 // SignerFn is a signer callback function to request a header to be signed by a
@@ -109,14 +111,14 @@ func (dc *DogeChain) Prepare(chain consensus.ChainHeaderReader, header *types.He
 func (dc *DogeChain) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
 	uncles []*types.Header, receipts *[]*types.Receipt, systemTxs *[]*types.Transaction, usedGas *uint64) error {
 	// TODO: use DC consensus to finalize block
-	return nil
+	return errNotSupported
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
 func (dc *DogeChain) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB,
 	txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, []*types.Receipt, error) {
-	return nil, nil, nil
+	return nil, nil, errNotSupported
 }
 
 func (dc *DogeChain) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
@@ -144,6 +146,77 @@ func (dc *DogeChain) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 // Argument leftOver is the time reserved for block finalize(calculate root, distribute income...)
 func (dc *DogeChain) Delay(chain consensus.ChainReader, header *types.Header, leftOver *time.Duration) *time.Duration {
 	return nil
+}
+
+func (dc *DogeChain) Process(block *types.Block, statedb *state.StateDB) (*state.StateDB, types.Receipts, []*types.Log, uint64, error) {
+	dc.lock.Lock()
+	defer dc.lock.Unlock()
+
+	dcBlk := DbscBlockToDcBlock(dc.chainConfig, block)
+
+	statedb.MarkFullProcessed()
+	dc.state.SetCommitHook(func(objs []*dcState.Object) {
+		for _, obj := range objs {
+			address := DcAddressToDbscAddress(obj.Address)
+
+			if obj.Deleted {
+				// empty object
+				if obj.Nonce == 0 && obj.Balance.Sign() == 0 && bytes.Equal(obj.CodeHash.Bytes(), types.EmptyCodeHash) {
+					continue
+				} else {
+					// is suicide object
+					statedb.Suicide(address)
+				}
+
+				continue
+			}
+
+			dbscObj := statedb.GetOrNewStateObject(address)
+			dbscObj.SetBalance(obj.Balance)
+			dbscObj.SetNonce(obj.Nonce)
+			dbscObj.SetCode(common.Hash(obj.CodeHash), obj.Code)
+
+			// update storage
+			for _, kv := range obj.Storage {
+				if kv.Deleted {
+					statedb.SetState(address, common.BytesToHash(kv.Key), common.Hash{})
+				} else {
+					statedb.SetState(
+						address,
+						common.BytesToHash(kv.Key),
+						common.BytesToHash(kv.Val),
+					)
+				}
+			}
+		}
+	})
+
+	// Do the initial block verification
+	if err := dc.blockchain.VerifyFinalizedBlock(dcBlk); err != nil {
+		return statedb, nil, nil, 0, err
+	}
+
+	if err := dc.blockchain.WriteBlock(dcBlk, "dbsc"); err != nil {
+		return statedb, nil, nil, 0, fmt.Errorf("failed to write block while bulk syncing: %w", err)
+	}
+
+	statedb.Finalise(true)
+
+	// Handle bridge logs
+	receipts, err := dc.blockchain.GetReceiptsByHash(dcBlk.Header.Hash)
+	if err != nil {
+		return statedb, nil, nil, 0, nil
+	}
+
+	dbscReceipts := DcReceiptsToDbscReceipts(receipts)
+
+	var allLogs []*types.Log
+
+	for _, receipt := range dbscReceipts {
+		allLogs = append(allLogs, receipt.Logs...)
+	}
+
+	return statedb, dbscReceipts, allLogs, dcBlk.Header.GasUsed, nil
 }
 
 // verifyHeader checks whether a header conforms to the consensus rules.The

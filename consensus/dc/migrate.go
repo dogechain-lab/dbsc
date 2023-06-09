@@ -7,6 +7,7 @@ import (
 
 	dbscCommon "github.com/ethereum/go-ethereum/common"
 	dbscTypes "github.com/ethereum/go-ethereum/core/types"
+	dbscParams "github.com/ethereum/go-ethereum/params"
 )
 
 func DcHashToDbscHash(hash types.Hash) dbscCommon.Hash {
@@ -168,15 +169,36 @@ func DcLogsToDbscLogs(logs []*types.Log) []*dbscTypes.Log {
 }
 
 func DcReceiptToDbscReceipt(receipt *types.Receipt) *dbscTypes.Receipt {
+	var contractAddress dbscCommon.Address
+	if receipt.ContractAddress == nil {
+		contractAddress = dbscCommon.Address{}
+	} else {
+		contractAddress = DcAddressToDbscAddress(*receipt.ContractAddress)
+	}
+
+	postState := []byte{}
+	status := dbscTypes.ReceiptStatusFailed
+
+	if receipt.Status != nil {
+		switch *receipt.Status {
+		case types.ReceiptSuccess:
+			status = dbscTypes.ReceiptStatusSuccessful
+		case types.ReceiptFailed:
+			status = dbscTypes.ReceiptStatusFailed
+		}
+	} else {
+		postState = receipt.Root.Bytes()
+	}
+
 	return &dbscTypes.Receipt{
 		Type:              dbscTypes.LegacyTxType,
-		PostState:         receipt.Root[:],
-		Status:            (uint64)(*receipt.Status),
+		PostState:         postState,
+		Status:            status,
 		CumulativeGasUsed: receipt.CumulativeGasUsed,
 		Bloom:             dbscTypes.BytesToBloom(receipt.LogsBloom[:]),
 		Logs:              DcLogsToDbscLogs(receipt.Logs),
 		TxHash:            DcHashToDbscHash(receipt.TxHash),
-		ContractAddress:   DcAddressToDbscAddress(*receipt.ContractAddress),
+		ContractAddress:   contractAddress,
 		GasUsed:           receipt.GasUsed,
 	}
 }
@@ -189,4 +211,50 @@ func DcReceiptsToDbscReceipts(receipts []*types.Receipt) []*dbscTypes.Receipt {
 	}
 
 	return result
+}
+
+func DbscBlockToDcBlock(cfg *dbscParams.ChainConfig, block *dbscTypes.Block) *types.Block {
+	blk := &types.Block{
+		Header:       DbscHeaderToDcHeader(block.Header()),
+		Transactions: make([]*types.Transaction, 0, len(block.Transactions())),
+		Uncles:       make([]*types.Header, 0, len(block.Uncles())),
+	}
+
+	signer := dbscTypes.MakeSigner(
+		cfg,
+		block.Number(),
+	)
+
+	// copy tx
+	for _, tx := range block.Transactions() {
+		dcTx, err := DbscTxToDcTx(signer, tx)
+		if err != nil {
+			panic(err)
+		}
+		blk.Transactions = append(blk.Transactions, dcTx)
+	}
+
+	// copy uncles
+	for _, uncle := range block.Uncles() {
+		blk.Uncles = append(blk.Uncles, DbscHeaderToDcHeader(uncle))
+	}
+
+	return blk
+}
+
+func DcBlockToDbscBlock(block *types.Block) *dbscTypes.Block {
+	dbscUncles := make([]*dbscTypes.Header, 0, len(block.Uncles))
+
+	for _, uncle := range block.Uncles {
+		dbscUncles = append(dbscUncles, DcHeaderToDbscHeader(uncle))
+	}
+
+	blk := dbscTypes.NewBlockWithHeader(
+		DcHeaderToDbscHeader(block.Header),
+	).WithBody(
+		DcTxsToDbscTxs(block.Transactions),
+		dbscUncles,
+	)
+
+	return blk
 }

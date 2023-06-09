@@ -163,7 +163,6 @@ func genesisGen(c *cli.Context) error {
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
 		IBFTBlock:           big.NewInt(0),
-		DogeBlock:           big.NewInt(0),
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),

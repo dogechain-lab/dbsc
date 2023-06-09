@@ -149,3 +149,9 @@ type PoSA interface {
 	IsLocalBlock(header *types.Header) bool
 	AllowLightProcess(chain ChainReader, currentHeader *types.Header) bool
 }
+
+type DC interface {
+	Engine
+
+	Process(block *types.Block, statedb *state.StateDB) (*state.StateDB, types.Receipts, []*types.Log, uint64, error)
+}
