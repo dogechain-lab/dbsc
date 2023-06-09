@@ -2983,6 +2983,11 @@ func (bc *BlockChain) TriesInMemory() uint64 { return bc.triesInMemory }
 
 // Options
 func EnableLightProcessor(bc *BlockChain) (*BlockChain, error) {
+	if _, ok := bc.engine.(consensus.DC); ok {
+		// light processor is not supported in Dogechain data
+		return bc, nil
+	}
+
 	bc.processor = NewLightStateProcessor(bc.Config(), bc, bc.engine)
 	return bc, nil
 }

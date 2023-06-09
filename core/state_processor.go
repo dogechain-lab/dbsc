@@ -87,6 +87,11 @@ func (p *LightStateProcessor) Process(block *types.Block, statedb *state.StateDB
 	if posa, ok := p.engine.(consensus.PoSA); ok {
 		allowLightProcess = posa.AllowLightProcess(p.bc, block.Header())
 	}
+
+	if _, ok := p.engine.(consensus.DC); ok {
+		allowLightProcess = false
+	}
+
 	// random fallback to full process
 	if allowLightProcess && block.NumberU64()%fullProcessCheck != uint64(p.check) && len(block.Transactions()) != 0 {
 		var pid string
@@ -387,6 +392,10 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs     []*types.Log
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
+
+	if dc, ok := p.engine.(consensus.DC); ok {
+		return dc.Process(block, statedb)
+	}
 
 	var receipts = make([]*types.Receipt, 0)
 	// Mutate the block and state according to any hard-fork specs

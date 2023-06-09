@@ -18,8 +18,6 @@ import (
 	"github.com/dogechain-lab/dogechain/state"
 	"github.com/dogechain-lab/dogechain/state/runtime/evm"
 	"github.com/dogechain-lab/dogechain/state/runtime/precompiled"
-
-	itrie "github.com/dogechain-lab/dogechain/state/immutable-trie"
 )
 
 func parseGenesis(genesisPath string) (*chain.Chain, error) {
@@ -114,7 +112,7 @@ func createConsensus(
 func createBlockchain(
 	logger hclog.Logger,
 	genesis *chain.Chain,
-	st itrie.StateDB,
+	st state.State,
 	dataDir string,
 ) (*blockchain.Blockchain, consensus.Consensus, error) {
 	executor := state.NewExecutor(genesis.Params, st, logger)

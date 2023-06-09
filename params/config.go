@@ -190,7 +190,6 @@ var (
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
 		IBFTBlock:           big.NewInt(0),
-		DogeBlock:           big.NewInt(0),
 		PortlandBlock:       big.NewInt(1981991),
 		DetroitBlock:        big.NewInt(4490834),
 
@@ -211,7 +210,6 @@ var (
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
 		IBFTBlock:           big.NewInt(0),
-		DogeBlock:           big.NewInt(0),
 		PreportlandBlock:    big.NewInt(1062992),
 		PortlandBlock:       big.NewInt(1065956),
 		DetroitBlock:        big.NewInt(2661202),
@@ -399,7 +397,6 @@ type ChainConfig struct {
 
 	// DC hard forks
 	IBFTBlock        *big.Int `json:"ibftBlock,omitempty" toml:",omitempty"`        // ibftBlock, a simulated genesis hard fork for dogechain
-	DogeBlock        *big.Int `json:"dogeBlock,omitempty" toml:",omitempty"`        // dogeBlock, migrate for dogechain blockdata
 	PreportlandBlock *big.Int `json:"preportlandBlock,omitempty" toml:",omitempty"` // preportlandBlock
 	PortlandBlock    *big.Int `json:"portlandBlock,omitempty" toml:",omitempty"`    // portlandBlock
 	DetroitBlock     *big.Int `json:"detroitBlock,omitempty" toml:",omitempty"`     // detroitBlock
@@ -487,7 +484,7 @@ func (c *ChainConfig) String() string {
 	default:
 		engine = "unknown"
 	}
-	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Ramanujan: %v, Niels: %v, MirrorSync: %v, Bruno: %v, Berlin: %v, YOLO v3: %v, CatalystBlock: %v, London: %v, ArrowGlacier: %v, MergeFork:%v, Euler: %v, Gibbs: %v, Nano: %v, Moran: %v, Planck: %v, IBFT: %v, Doge: %v, Preportland: %v, Portland: %v, Detroit: %v, Hawaii: %v, Engine: %v}",
+	return fmt.Sprintf("{ChainID: %v Homestead: %v DAO: %v DAOSupport: %v EIP150: %v EIP155: %v EIP158: %v Byzantium: %v Constantinople: %v Petersburg: %v Istanbul: %v, Muir Glacier: %v, Ramanujan: %v, Niels: %v, MirrorSync: %v, Bruno: %v, Berlin: %v, YOLO v3: %v, CatalystBlock: %v, London: %v, ArrowGlacier: %v, MergeFork:%v, Euler: %v, Gibbs: %v, Nano: %v, Moran: %v, Planck: %v, IBFT: %v, Preportland: %v, Portland: %v, Detroit: %v, Hawaii: %v, Engine: %v}",
 		c.ChainID,
 		c.HomesteadBlock,
 		c.DAOForkBlock,
@@ -516,7 +513,6 @@ func (c *ChainConfig) String() string {
 		c.MoranBlock,
 		c.PlanckBlock,
 		c.IBFTBlock,
-		c.DogeBlock,
 		c.PreportlandBlock,
 		c.PortlandBlock,
 		c.DetroitBlock,
@@ -690,14 +686,6 @@ func (c *ChainConfig) IsIBFT(num *big.Int) bool {
 
 func (c *ChainConfig) IsOnIBFT(num *big.Int) bool {
 	return configNumEqual(c.IBFTBlock, num)
-}
-
-func (c *ChainConfig) IsDoge(num *big.Int) bool {
-	return isForked(c.DogeBlock, num)
-}
-
-func (c *ChainConfig) IsOnDoge(num *big.Int) bool {
-	return configNumEqual(c.DogeBlock, num)
 }
 
 func (c *ChainConfig) IsPrePortland(num *big.Int) bool {

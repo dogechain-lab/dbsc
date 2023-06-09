@@ -30,14 +30,12 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
 	lru "github.com/hashicorp/golang-lru"
 )
 
 // Snapshot is the state of the validatorSet at a given point.
 type Snapshot struct {
 	epochSize    uint64
-	config       *params.DogeConfig // Consensus engine parameters to fine tune behavior
 	ethAPI       *ethapi.PublicBlockChainAPI
 	sigCache     *lru.ARCCache               // Cache of recent block signatures to speed up ecrecover
 	validatorSet map[common.Address]struct{} // validator set for quick query
@@ -74,7 +72,7 @@ func newSnapshot(
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.DogeConfig, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) {
+func loadSnapshot(epochSize uint64, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) {
 	blob, err := db.Get(append([]byte("ibft-"), hash[:]...))
 	if err != nil {
 		return nil, err
@@ -83,7 +81,7 @@ func loadSnapshot(config *params.DogeConfig, sigCache *lru.ARCCache, db ethdb.Da
 	if err := json.Unmarshal(blob, snap); err != nil {
 		return nil, err
 	}
-	snap.config = config
+	snap.epochSize = epochSize
 	snap.sigCache = sigCache
 	snap.ethAPI = ethAPI
 	// reset cache
@@ -113,7 +111,7 @@ func (s *Snapshot) copyValidators() []common.Address {
 // copy creates a deep copy of the snapshot
 func (s *Snapshot) copy() *Snapshot {
 	cpy := &Snapshot{
-		config:       s.config,
+		epochSize:    s.epochSize,
 		ethAPI:       s.ethAPI,
 		sigCache:     s.sigCache,
 		validatorSet: make(map[common.Address]struct{}),
@@ -273,7 +271,7 @@ func (dc *DogeChain) snapshot(chain consensus.ChainHeaderReader, number uint64, 
 
 		// If an on-disk checkpoint snapshot can be found, use that
 		if number%checkpointInterval == 0 {
-			if s, err := loadSnapshot(dc.config, dc.signatures, dc.db, hash, dc.ethAPI); err == nil {
+			if s, err := loadSnapshot(dc.epochSize, dc.signatures, dc.db, hash, dc.ethAPI); err == nil {
 				log.Trace("Loaded snapshot from disk", "number", number, "hash", hash)
 				snap = s
 				break
