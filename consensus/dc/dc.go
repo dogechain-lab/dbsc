@@ -10,7 +10,9 @@ import (
 	"github.com/dogechain-lab/dogechain/blockchain"
 	"github.com/dogechain-lab/dogechain/consensus"
 	"github.com/dogechain-lab/dogechain/consensus/ibft"
+	"github.com/dogechain-lab/dogechain/state"
 
+	"github.com/ethereum/go-ethereum/dcmetrics"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/params"
@@ -38,8 +40,10 @@ type DogeChain struct {
 	config      *params.DogeConfig
 	epochSize   uint64
 
-	blockchain   *blockchain.Blockchain
-	consensus    consensus.Consensus
+	blockchain *blockchain.Blockchain
+	executor   *state.Executor
+	consensus  consensus.Consensus
+
 	stateStorage itrie.Storage
 	state        *WrapDcState
 
@@ -97,22 +101,27 @@ func New(
 		}
 	}
 
+	storageBuilder := newLevelDBBuilder(logger, filepath.Join(chainConfig.Doge.DataDir, "trie"))
+	storageBuilder.SetCacheSize(16384)
+
 	stateStorage, err := itrie.NewLevelDBStorage(
-		newLevelDBBuilder(logger, filepath.Join(chainConfig.Doge.DataDir, "trie")))
+		storageBuilder)
 	if err != nil {
 		logger.Error("failed to create state storage")
 
 		return nil, err
 	}
 
-	dcStateDb := itrie.NewStateDB(stateStorage, logger, itrie.NilMetrics())
+	dcStateDb := itrie.NewStateDB(stateStorage, logger, dcmetrics.SharedMetrics().Trie)
 	wrapDcStateDb := NewWrapDcState(dcStateDb)
 
-	blockchain, consensus, err := createBlockchain(
+	blockchain, executor, consensus, err := createBlockchain(
 		logger,
 		genesis,
 		wrapDcStateDb,
 		chainConfig.Doge.DataDir,
+		dcmetrics.SharedMetrics().Blockchain,
+		dcmetrics.SharedMetrics().Consensus,
 	)
 	if err != nil {
 		stateStorage.Close()
@@ -135,6 +144,7 @@ func New(
 		config:       chainConfig.Doge,
 		epochSize:    epochSize,
 		blockchain:   blockchain,
+		executor:     executor,
 		consensus:    consensus,
 		recentSnaps:  recentSnaps,
 		signatures:   signatures,

@@ -141,6 +141,18 @@ type StateDB struct {
 	SnapshotAccountReads time.Duration
 	SnapshotStorageReads time.Duration
 	SnapshotCommits      time.Duration
+	// Measurements for debugging DC verification purposes
+	DCProcessBlock   time.Duration
+	DCVerifications  time.Duration
+	DCWriteBlocks    time.Duration
+	DCFinaliseStates time.Duration
+	DCGetReceipts    time.Duration
+	DCCommitHooks    time.Duration
+	DCGetObjects     time.Duration
+	DCSetObjects     time.Duration
+	DCObjects        int
+	DCSetStorages    time.Duration
+	DCStorages       int
 
 	AccountUpdated int
 	StorageUpdated int

@@ -180,6 +180,9 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		utils.EnableMinerInfo(ctx, cfg.Eth.Miner),
 		utils.EnableNodeInfo(cfg.Eth.TxPool),
 	)
+
+	utils.SetupDCMetrics(ctx, cfg.Eth.Genesis.Config.ChainID.String())
+
 	return stack, backend
 }
 
@@ -224,6 +227,9 @@ func applyMetricConfig(ctx *cli.Context, cfg *gethConfig) {
 	}
 	if ctx.GlobalIsSet(utils.MetricsPortFlag.Name) {
 		cfg.Metrics.Port = ctx.GlobalInt(utils.MetricsPortFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.MetricsDCPortFlag.Name) {
+		cfg.Metrics.DCPort = ctx.GlobalInt(utils.MetricsDCPortFlag.Name)
 	}
 	if ctx.GlobalIsSet(utils.MetricsEnableInfluxDBFlag.Name) {
 		cfg.Metrics.EnableInfluxDB = ctx.GlobalBool(utils.MetricsEnableInfluxDBFlag.Name)

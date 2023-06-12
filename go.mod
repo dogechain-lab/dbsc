@@ -71,9 +71,10 @@ require (
 
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
-	github.com/dogechain-lab/dogechain v1.2.5-0.20230609075748-7fbfa89e0035
+	github.com/dogechain-lab/dogechain v1.2.6-0.20230801015717-955cdb2527b3
 	github.com/fatih/structs v1.1.0
 	github.com/hashicorp/go-hclog v1.5.0
+	github.com/prometheus/client_golang v1.14.0
 	go.uber.org/automaxprocs v1.5.3
 )
 
@@ -192,7 +193,6 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_golang v1.14.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect

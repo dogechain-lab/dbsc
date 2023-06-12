@@ -150,8 +150,15 @@ type PoSA interface {
 	AllowLightProcess(chain ChainReader, currentHeader *types.Header) bool
 }
 
+type ExecutionResult interface {
+	UsedGas() uint64
+	ReturnData() []byte
+	Error() error
+}
+
 type DC interface {
 	Engine
 
+	DoCall(tx *types.Message, header *types.Header, globalGasCap uint64) (ExecutionResult, error)
 	Process(block *types.Block, statedb *state.StateDB) (*state.StateDB, types.Receipts, []*types.Log, uint64, error)
 }

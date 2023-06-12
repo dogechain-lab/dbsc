@@ -36,6 +36,13 @@ func newLevelDBBuilder(log hclog.Logger, path string) kvdb.LevelDBBuilder {
 		path,
 	)
 
+	leveldbBuilder.
+		SetBloomKeyBits(2048).
+		SetCompactionTableSize(4).
+		SetCompactionTotalSize(100).
+		SetHandles(16384).
+		SetCacheSize(512)
+
 	return leveldbBuilder
 }
 
@@ -45,6 +52,7 @@ func createConsensus(
 	blockchain *blockchain.Blockchain,
 	executor *state.Executor,
 	dataDir string,
+	metrics *consensus.Metrics,
 ) (consensus.Consensus, error) {
 	engineName := genesis.Params.GetEngine()
 	engine, ok := server.GetConsensusBackend(engineName)
@@ -95,7 +103,7 @@ func createConsensus(
 			Executor:       executor,
 			Grpc:           nil,
 			Logger:         logger.Named("consensus"),
-			Metrics:        nil,
+			Metrics:        metrics,
 			SecretsManager: secretsManager,
 			BlockTime:      2,
 			BlockBroadcast: false,
@@ -114,17 +122,22 @@ func createBlockchain(
 	genesis *chain.Chain,
 	st state.State,
 	dataDir string,
-) (*blockchain.Blockchain, consensus.Consensus, error) {
+	blockMetrics *blockchain.Metrics,
+	consensusMetrics *consensus.Metrics,
+) (*blockchain.Blockchain, *state.Executor, consensus.Consensus, error) {
 	executor := state.NewExecutor(genesis.Params, st, logger)
 	executor.SetRuntime(precompiled.NewPrecompiled())
 	executor.SetRuntime(evm.NewEVM())
 
 	genesisRoot, err := executor.WriteGenesis(genesis.Genesis.Alloc)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	genesis.Genesis.StateRoot = genesisRoot
+
+	storageBuilder := newLevelDBBuilder(logger, filepath.Join(dataDir, "blockchain"))
+	storageBuilder.SetCacheSize(1024)
 
 	chain, err := blockchain.NewBlockchain(
 		logger,
@@ -132,37 +145,37 @@ func createBlockchain(
 		0, // don't care price bottom limit when reverify.
 		kvstorage.NewLevelDBStorageBuilder(
 			logger,
-			newLevelDBBuilder(logger, filepath.Join(dataDir, "blockchain")),
+			storageBuilder,
 		),
 		nil,
 		executor,
-		nil,
+		blockMetrics,
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	executor.GetHash = chain.GetHashHelper
 
-	consensus, err := createConsensus(logger, genesis, chain, executor, dataDir)
+	consensus, err := createConsensus(logger, genesis, chain, executor, dataDir, consensusMetrics)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	chain.SetConsensus(consensus)
 
 	if err := chain.ComputeGenesis(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// initialize data in consensus layer
 	if err := consensus.Initialize(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if err := consensus.Start(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return chain, consensus, nil
+	return chain, executor, consensus, nil
 }

@@ -897,6 +897,59 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
+	// TODO: hard fork check
+	if dc, ok := b.Engine().(consensus.DC); ok {
+		header, err := b.HeaderByNumberOrHash(ctx, blockNrOrHash)
+		if err != nil {
+			return nil, err
+		}
+
+		if args.ChainID == nil {
+			args.ChainID = (*hexutil.Big)(b.ChainConfig().ChainID)
+		}
+
+		if args.Gas == nil {
+			gaslimit := hexutil.Uint64(header.GasLimit)
+			args.Gas = &gaslimit
+			msg, err := args.ToMessage(globalGasCap, header.BaseFee)
+			if err != nil {
+				return nil, err
+			}
+
+			result, err := dc.DoCall(&msg, header, globalGasCap)
+			if err != nil {
+				return nil, err
+			}
+
+			if result.Error() != nil {
+				return &core.ExecutionResult{
+					UsedGas:    result.UsedGas(),
+					ReturnData: result.ReturnData(),
+					Err:        result.Error(),
+				}, nil
+			}
+
+			useGas := hexutil.Uint64(result.UsedGas())
+			args.Gas = &useGas
+		}
+
+		msg, err := args.ToMessage(globalGasCap, header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
+
+		result, err := dc.DoCall(&msg, header, globalGasCap)
+		if err != nil && result == nil {
+			return nil, err
+		}
+
+		return &core.ExecutionResult{
+			UsedGas:    result.UsedGas(),
+			ReturnData: result.ReturnData(),
+			Err:        result.Error(),
+		}, err
+	}
+
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err

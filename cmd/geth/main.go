@@ -205,6 +205,7 @@ var (
 		utils.MetricsEnabledExpensiveFlag,
 		utils.MetricsHTTPFlag,
 		utils.MetricsPortFlag,
+		utils.MetricsDCPortFlag,
 		utils.MetricsEnableInfluxDBFlag,
 		utils.MetricsInfluxDBEndpointFlag,
 		utils.MetricsInfluxDBDatabaseFlag,
