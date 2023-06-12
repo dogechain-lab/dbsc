@@ -22,6 +22,7 @@ type Config struct {
 	EnabledExpensive bool   `toml:",omitempty"`
 	HTTP             string `toml:",omitempty"`
 	Port             int    `toml:",omitempty"`
+	DCPort           int    `toml:",omitempty"`
 	EnableInfluxDB   bool   `toml:",omitempty"`
 	InfluxDBEndpoint string `toml:",omitempty"`
 	InfluxDBDatabase string `toml:",omitempty"`
@@ -41,6 +42,7 @@ var DefaultConfig = Config{
 	EnabledExpensive: false,
 	HTTP:             "127.0.0.1",
 	Port:             6060,
+	DCPort:           9090,
 	EnableInfluxDB:   false,
 	InfluxDBEndpoint: "http://localhost:8086",
 	InfluxDBDatabase: "geth",

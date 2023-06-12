@@ -50,6 +50,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/dcmetrics"
 	"github.com/ethereum/go-ethereum/eth"
 	ethcatalyst "github.com/ethereum/go-ethereum/eth/catalyst"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -800,6 +801,11 @@ var (
 		Name:  "metrics.port",
 		Usage: "Metrics HTTP server listening port",
 		Value: metrics.DefaultConfig.Port,
+	}
+	MetricsDCPortFlag = cli.IntFlag{
+		Name:  "metrics.dcport",
+		Usage: "DC Metrics HTTP server listening port",
+		Value: metrics.DefaultConfig.DCPort,
 	}
 	MetricsEnableInfluxDBFlag = cli.BoolFlag{
 		Name:  "metrics.influxdb",
@@ -1997,6 +2003,41 @@ func SetupMetrics(ctx *cli.Context, options ...SetupMetricsOption) {
 
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)
+	}
+}
+
+type SetupDCMetricsOption func()
+
+func EnableDCBuildInfo(gitCommit, gitDate string) SetupDCMetricsOption {
+	return func() {
+		// register build info into metrics
+		metrics.NewRegisteredLabel("build-info", nil).Mark(map[string]interface{}{
+			"version":          params.VersionWithMeta,
+			"git-commit":       gitCommit,
+			"git-commit-date":  gitDate,
+			"go-version":       runtime.Version(),
+			"operating-system": runtime.GOOS,
+			"architecture":     runtime.GOARCH,
+		})
+	}
+}
+
+func SetupDCMetrics(ctx *cli.Context, chainID string) {
+	if !metrics.Enabled {
+		return
+	}
+
+	log.Info("Enabling DC metrics collection")
+
+	// initializing
+	dcmetrics.ChainID = chainID
+	dcmetrics.SharedMetrics()
+
+	if ctx.GlobalIsSet(MetricsHTTPFlag.Name) {
+		address := fmt.Sprintf("%s:%d", ctx.GlobalString(MetricsHTTPFlag.Name), ctx.GlobalInt(MetricsDCPortFlag.Name))
+		log.Info("Enabling stand-alone DC metrics HTTP endpoint", "address", address)
+		dcmetrics.StartPrometheusServer(address)
+		exp.Setup(address)
 	}
 }
 

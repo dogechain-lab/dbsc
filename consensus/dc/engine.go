@@ -25,6 +25,12 @@ import (
 )
 
 var (
+	// errBlockHeaderNotExists is returned when block header not exists.
+	errBlockHeaderNotExists = errors.New("block header not exists")
+
+	// errBlockNotExists is returned when block not exists.
+	errBlockNotExists = errors.New("block not exists")
+
 	// errInvalidBlockTimestamp is returned when it is a future block.
 	errInvalidBlockTimestamp = errors.New("invalid block timestamp")
 
@@ -61,6 +67,24 @@ var (
 // backing account.
 type SignerFn func(accounts.Account, string, []byte) ([]byte, error)
 type SignerTxFn func(accounts.Account, *types.Transaction, *big.Int) (*types.Transaction, error)
+
+type executionResult struct {
+	gasUsed uint64
+	data    []byte
+	err     error
+}
+
+func (er *executionResult) UsedGas() uint64 {
+	return er.gasUsed
+}
+
+func (er *executionResult) ReturnData() []byte {
+	return er.data
+}
+
+func (er *executionResult) Error() error {
+	return er.err
+}
 
 // Author implements consensus.Engine, returning the SystemAddress
 func (dc *DogeChain) Author(header *types.Header) (common.Address, error) {
@@ -148,36 +172,85 @@ func (dc *DogeChain) Delay(chain consensus.ChainReader, header *types.Header, le
 	return nil
 }
 
+func (dc *DogeChain) DoCall(msg *types.Message, header *types.Header, globalGasCap uint64) (consensus.ExecutionResult, error) {
+	dcHeader, exist := dc.blockchain.GetHeaderByHash(DbscHashToDcHash(header.Hash()))
+	if !exist {
+		return nil, errBlockHeaderNotExists
+	}
+
+	blockCreator, err := dc.consensus.GetBlockCreator(dcHeader)
+	if err != nil {
+		log.Error("failed to get block creator", "error", err)
+
+		return nil, errBlockNotExists
+	}
+
+	transition, err := dc.executor.BeginTxn(dcHeader.StateRoot, dcHeader, blockCreator)
+	if err != nil {
+		log.Error("failed to begin transaction", "error", err)
+
+		return nil, err
+	}
+
+	txn := DbscMsgToTx(msg)
+	result, err := transition.Apply(txn)
+	if err != nil {
+		return nil, err
+	}
+
+	return &executionResult{
+		gasUsed: result.GasUsed,
+		data:    result.ReturnValue,
+		err:     result.Err,
+	}, err
+}
+
 func (dc *DogeChain) Process(block *types.Block, statedb *state.StateDB) (*state.StateDB, types.Receipts, []*types.Log, uint64, error) {
 	dc.lock.Lock()
 	defer dc.lock.Unlock()
+
+	start := time.Now()
+	defer func() {
+		statedb.DCProcessBlock += time.Since(start)
+	}()
 
 	dcBlk := DbscBlockToDcBlock(dc.chainConfig, block)
 
 	statedb.MarkFullProcessed()
 	dc.state.SetCommitHook(func(objs []*dcState.Object) {
+		start := time.Now()
+		defer func() {
+			statedb.DCCommitHooks += time.Since(start)
+		}()
+
 		for _, obj := range objs {
+			// objstart := time.Now()
 			address := DcAddressToDbscAddress(obj.Address)
 
 			if obj.Deleted {
-				// empty object
+				// empty object may have transition, so we'll leave it to statedb jounal
 				if obj.Nonce == 0 && obj.Balance.Sign() == 0 && bytes.Equal(obj.CodeHash.Bytes(), types.EmptyCodeHash) {
-					continue
 				} else {
 					// is suicide object
 					statedb.Suicide(address)
+					// statedb.DCSetObjects += time.Since(objstart)
+					// statedb.DCObjects++
+					continue
 				}
-
-				continue
 			}
 
 			dbscObj := statedb.GetOrNewStateObject(address)
+			// statedb.DCGetObjects += time.Since(objstart)
+
+			// substart := time.Now()
 			dbscObj.SetBalance(obj.Balance)
 			dbscObj.SetNonce(obj.Nonce)
 			dbscObj.SetCode(common.Hash(obj.CodeHash), obj.Code)
+			// statedb.DCSetObjects += time.Since(substart)
 
 			// update storage
 			for _, kv := range obj.Storage {
+				// storagestart := time.Now()
 				if kv.Deleted {
 					statedb.SetState(address, common.BytesToHash(kv.Key), common.Hash{})
 				} else {
@@ -187,26 +260,43 @@ func (dc *DogeChain) Process(block *types.Block, statedb *state.StateDB) (*state
 						common.BytesToHash(kv.Val),
 					)
 				}
+				// statedb.DCSetStorages += time.Since(storagestart)
+				// statedb.DCStorages++
 			}
+
+			// statedb.DCObjects++
 		}
 	})
+
+	substart := time.Now()
 
 	// Do the initial block verification
 	if err := dc.blockchain.VerifyFinalizedBlock(dcBlk); err != nil {
 		return statedb, nil, nil, 0, err
 	}
+	// Update metrics
+	statedb.DCVerifications += time.Since(substart)
 
+	substart = time.Now()
 	if err := dc.blockchain.WriteBlock(dcBlk, "dbsc"); err != nil {
 		return statedb, nil, nil, 0, fmt.Errorf("failed to write block while bulk syncing: %w", err)
 	}
+	// Update metrics
+	statedb.DCWriteBlocks += time.Since(substart)
 
+	substart = time.Now()
 	statedb.Finalise(true)
+	// Update metrics
+	statedb.DCFinaliseStates += time.Since(substart)
 
+	substart = time.Now()
 	// Handle bridge logs
 	receipts, err := dc.blockchain.GetReceiptsByHash(dcBlk.Header.Hash)
 	if err != nil {
 		return statedb, nil, nil, 0, nil
 	}
+	// Update metrics
+	statedb.DCGetReceipts += time.Since(substart)
 
 	dbscReceipts := DcReceiptsToDbscReceipts(receipts)
 

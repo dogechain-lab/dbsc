@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/dogechain-lab/dogechain/types"
+	"github.com/ethereum/go-ethereum/log"
 
 	dbscCommon "github.com/ethereum/go-ethereum/common"
 	dbscTypes "github.com/ethereum/go-ethereum/core/types"
@@ -57,6 +58,25 @@ func DcTxToDbscTx(tx *types.Transaction) *dbscTypes.Transaction {
 	})
 }
 
+func DbscMsgToTx(msg *dbscTypes.Message) *types.Transaction {
+	var toAddress *types.Address = nil
+
+	if msg.To() != nil {
+		add := types.Address(*msg.To())
+		toAddress = &add
+	}
+
+	return &types.Transaction{
+		Nonce:    msg.Nonce(),
+		GasPrice: msg.GasPrice(),
+		Gas:      msg.Gas(),
+		To:       toAddress,
+		Value:    msg.Value(),
+		Input:    msg.Data(),
+		From:     types.Address(msg.From()),
+	}
+}
+
 func DbscTxToDcTx(signer dbscTypes.Signer, tx *dbscTypes.Transaction) (*types.Transaction, error) {
 	var toAddress *types.Address = nil
 
@@ -66,10 +86,10 @@ func DbscTxToDcTx(signer dbscTypes.Signer, tx *dbscTypes.Transaction) (*types.Tr
 	}
 
 	v, r, s := tx.RawSignatureValues()
-	send, err := dbscTypes.Sender(signer, tx)
+	sender, err := dbscTypes.Sender(signer, tx)
 
 	if err != nil {
-		return nil, err
+		log.Debug("sender is nil", sender)
 	}
 
 	return &types.Transaction{
@@ -82,7 +102,7 @@ func DbscTxToDcTx(signer dbscTypes.Signer, tx *dbscTypes.Transaction) (*types.Tr
 		V:            v,
 		R:            r,
 		S:            s,
-		From:         types.Address(send),
+		From:         types.Address(sender),
 		ReceivedTime: tx.Time(),
 	}, nil
 }
