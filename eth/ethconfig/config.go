@@ -248,7 +248,7 @@ type Config struct {
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
 func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.PublicBlockChainAPI, genesisHash common.Hash) (consensus.Engine, error) {
-	// dogechain consensus
+	// dc, original dogechain data
 	if chainConfig.Doge != nil {
 		return dc.New(chainConfig, stack.Config(), db, ee)
 	}

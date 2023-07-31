@@ -408,8 +408,8 @@ type ChainConfig struct {
 	Ethash *EthashConfig `json:"ethash,omitempty" toml:",omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty" toml:",omitempty"`
 	Parlia *ParliaConfig `json:"parlia,omitempty" toml:",omitempty"`
-	IBFT   *IBFTConfig   `json:"ibft,omitempty" toml:",omitempty"`
 	Doge   *DogeConfig   `json:"doge,omitempty" toml:",omitempty"`
+	IBFT   *IBFTConfig   `json:"ibft,omitempty" toml:",omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -444,18 +444,13 @@ type IBFTType string
 
 const (
 	IBFTPoS IBFTType = "PoS"
-	IBFTPoA IBFTType = "PoA"
+	// IBFTPoA IBFTType = "PoA" // not supported any more
 )
 
 // ParliaConfig is the consensus engine configs for istanbul-byzantium-fault-tolarance based sealing.
 type IBFTConfig struct {
 	EpochSize uint64   `json:"epochSize"`
 	Type      IBFTType `json:"type"`
-}
-
-// String implements the stringer interface, returning the consensus engine details.
-func (c *IBFTConfig) String() string {
-	return "ibft"
 }
 
 // ParliaConfig is the consensus engine configs for proof-of-staked-authority based sealing.
@@ -473,16 +468,16 @@ func (b *ParliaConfig) String() string {
 func (c *ChainConfig) String() string {
 	var engine interface{}
 	switch {
+	case c.IBFT != nil:
+		engine = c.IBFT
+	case c.Doge != nil:
+		engine = c.Doge
 	case c.Ethash != nil:
 		engine = c.Ethash
 	case c.Clique != nil:
 		engine = c.Clique
 	case c.Parlia != nil:
 		engine = c.Parlia
-	case c.IBFT != nil:
-		engine = c.IBFT
-	case c.Doge != nil:
-		engine = c.Doge
 	default:
 		engine = "unknown"
 	}
@@ -852,6 +847,21 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	}
 	if isForkIncompatible(c.PlanckBlock, newcfg.PlanckBlock, head) {
 		return newCompatError("planck fork block", c.PlanckBlock, newcfg.PlanckBlock)
+	}
+	if isForkIncompatible(c.IBFTBlock, newcfg.IBFTBlock, head) {
+		return newCompatError("IBFT fork block", c.IBFTBlock, newcfg.IBFTBlock)
+	}
+	if isForkIncompatible(c.PreportlandBlock, newcfg.PreportlandBlock, head) {
+		return newCompatError("pre-portland fork block", c.PreportlandBlock, newcfg.PreportlandBlock)
+	}
+	if isForkIncompatible(c.PortlandBlock, newcfg.PortlandBlock, head) {
+		return newCompatError("portland fork block", c.PortlandBlock, newcfg.PortlandBlock)
+	}
+	if isForkIncompatible(c.DetroitBlock, newcfg.DetroitBlock, head) {
+		return newCompatError("detroit fork block", c.DetroitBlock, newcfg.DetroitBlock)
+	}
+	if isForkIncompatible(c.HawaiiBlock, newcfg.HawaiiBlock, head) {
+		return newCompatError("hawaii fork block", c.HawaiiBlock, newcfg.HawaiiBlock)
 	}
 	return nil
 }

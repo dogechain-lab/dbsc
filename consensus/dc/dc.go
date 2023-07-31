@@ -98,6 +98,8 @@ func New(
 		Params:  chainConfig.Doge.Params,
 	}
 
+	cfg := chainConfig.Doge
+
 	var epochSize uint64 = defaultEpochLength
 	if genesis.Params.Engine["ibft"] != nil {
 		if ibftCfg, ok := genesis.Params.Engine["ibft"].(map[string]interface{}); ok {
@@ -107,9 +109,7 @@ func New(
 				if !ok {
 					return nil, errors.New("epochSize invalid type assertion")
 				}
-
 				epochSize = uint64(readSize)
-
 				if epochSize == 0 {
 					// epoch size should never be zero.
 					epochSize = defaultEpochLength
@@ -158,7 +158,7 @@ func New(
 
 	return &DogeChain{
 		chainConfig:  chainConfig,
-		config:       chainConfig.Doge,
+		config:       cfg,
 		epochSize:    epochSize,
 		blockchain:   blockchain,
 		executor:     executor,
