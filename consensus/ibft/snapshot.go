@@ -18,7 +18,9 @@ package ibft
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"sort"
 
@@ -31,6 +33,10 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
+const (
+	validatorBytesLength = common.AddressLength
+)
+
 // Snapshot is the state of the validatorSet at a given point.
 type Snapshot struct {
 	config       *params.IBFTConfig // Consensus engine parameters to fine tune behavior
@@ -38,9 +44,11 @@ type Snapshot struct {
 	sigCache     *lru.ARCCache               // Cache of recent block signatures to speed up ecrecover
 	validatorSet map[common.Address]struct{} // validator set for quick query
 
-	Number     uint64           `json:"number"`     // Block number where the snapshot was created
-	Hash       common.Hash      `json:"hash"`       // Block hash where the snapshot was created
-	Validators []common.Address `json:"validators"` // Sequenced slice of authorized validators at this moment
+	Number           uint64                    `json:"number"`             // Block number where the snapshot was created
+	Hash             common.Hash               `json:"hash"`               // Block hash where the snapshot was created
+	Validators       []common.Address          `json:"validators"`         // Sequenced slice of authorized validators at this moment
+	Recents          map[uint64]common.Address `json:"recents"`            // Set of recent validators for spam protections
+	RecentForkHashes map[uint64]string         `json:"recent_fork_hashes"` // Set of recent forkHash
 }
 
 // newSnapshot creates a new snapshot with the specified startup parameters. This
@@ -55,13 +63,15 @@ func newSnapshot(
 	ethAPI *ethapi.PublicBlockChainAPI,
 ) *Snapshot {
 	snap := &Snapshot{
-		config:       config,
-		ethAPI:       ethAPI,
-		sigCache:     sigCache,
-		validatorSet: make(map[common.Address]struct{}),
-		Number:       number,
-		Hash:         hash,
-		Validators:   validators,
+		config:           config,
+		ethAPI:           ethAPI,
+		sigCache:         sigCache,
+		validatorSet:     make(map[common.Address]struct{}),
+		Number:           number,
+		Hash:             hash,
+		Validators:       validators,
+		Recents:          make(map[uint64]common.Address),
+		RecentForkHashes: make(map[uint64]string),
 	}
 	for _, v := range validators {
 		snap.validatorSet[v] = struct{}{}
@@ -109,20 +119,38 @@ func (s *Snapshot) copyValidators() []common.Address {
 // copy creates a deep copy of the snapshot
 func (s *Snapshot) copy() *Snapshot {
 	cpy := &Snapshot{
-		config:       s.config,
-		ethAPI:       s.ethAPI,
-		sigCache:     s.sigCache,
-		validatorSet: make(map[common.Address]struct{}),
-		Number:       s.Number,
-		Hash:         s.Hash,
-		Validators:   make([]common.Address, len(s.Validators)),
+		config:           s.config,
+		ethAPI:           s.ethAPI,
+		sigCache:         s.sigCache,
+		validatorSet:     make(map[common.Address]struct{}),
+		Number:           s.Number,
+		Hash:             s.Hash,
+		Validators:       make([]common.Address, len(s.Validators)),
+		Recents:          make(map[uint64]common.Address),
+		RecentForkHashes: make(map[uint64]string),
 	}
 
 	for i, v := range s.Validators {
 		cpy.Validators[i] = v
 		cpy.validatorSet[v] = struct{}{}
 	}
+	for block, v := range s.Recents {
+		cpy.Recents[block] = v
+	}
+	for block, id := range s.RecentForkHashes {
+		cpy.RecentForkHashes[block] = id
+	}
 	return cpy
+}
+
+func (s *Snapshot) isMajorityFork(forkHash string) bool {
+	ally := 0
+	for _, h := range s.RecentForkHashes {
+		if h == forkHash {
+			ally++
+		}
+	}
+	return ally > len(s.RecentForkHashes)/2
 }
 
 func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainHeaderReader, parents []*types.Header, chainId *big.Int) (*Snapshot, error) {
@@ -150,34 +178,83 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainHeaderRea
 
 	for _, header := range headers {
 		number := header.Number.Uint64()
+		// Delete the oldest validator from the recent list to allow it signing again
+		if limit := uint64(len(snap.Validators)/2 + 1); number >= limit {
+			delete(snap.Recents, number-limit)
+		}
+		if limit := uint64(len(snap.Validators)); number >= limit {
+			delete(snap.RecentForkHashes, number-limit)
+		}
+
 		// Resolve the authorization key and check against signers
 		validator, err := ecrecover(header, s.sigCache, chainId)
 		if err != nil {
 			return nil, err
 		}
+
 		// Check whether it is in validator set
 		if !snap.includeValidator(validator) {
 			return nil, errUnauthorizedValidator
 		}
-		// change validator set
-		if number > 0 && number%s.config.EpochSize == 0 {
+
+		// should not sign recently for fairness
+		for _, recent := range snap.Recents {
+			if recent == validator {
+				return nil, errRecentlySigned
+			}
+		}
+
+		// cache recent signed
+		snap.Recents[number] = validator
+
+		// Change validator set a little after epoch change,
+		// so that validators fairly seal their turns.
+		if number > 0 && number%s.config.EpochSize == uint64(len(snap.Validators)/2) {
 			checkpointHeader := FindAncientHeader(header, uint64(len(snap.Validators)/2), chain, parents)
 			if checkpointHeader == nil {
 				return nil, consensus.ErrUnknownAncestor
 			}
+
 			// parse validators from extra
-			extra, err := types.GetIbftExtra(checkpointHeader.Extra)
+			// extra, err := types.GetIbftExtra(checkpointHeader.Extra)
+			// if err != nil {
+			// 	return nil, err
+			// }
+			validatorBytes := checkpointHeader.Extra[ExtraVanity : len(checkpointHeader.Extra)-extraSeal]
+			// get validators from headers and use that for new validator set
+			newValArr, err := parseValidators(validatorBytes)
 			if err != nil {
 				return nil, err
 			}
+
 			// new set
-			newValSet := make(map[common.Address]struct{}, len(extra.Validators))
-			for _, val := range extra.Validators {
+			newValSet := make(map[common.Address]struct{}, len(newValArr))
+			for _, val := range newValArr {
 				newValSet[val] = struct{}{}
 			}
-			snap.Validators = extra.Validators
+
+			// remove oldest validator signature flags to free them signable again
+			oldLimit := len(snap.Validators)/2 + 1
+			newLimit := len(newValSet)/2 + 1
+			if newLimit < oldLimit {
+				for i := 0; i < oldLimit-newLimit; i++ {
+					delete(snap.Recents, number-uint64(newLimit)-uint64(i))
+				}
+			}
+			oldLimit = len(snap.Validators)
+			newLimit = len(newValSet)
+			if newLimit < oldLimit {
+				for i := 0; i < oldLimit-newLimit; i++ {
+					delete(snap.RecentForkHashes, number-uint64(newLimit)-uint64(i))
+				}
+			}
+
+			// cache new validator set
+			snap.Validators = newValArr
 			snap.validatorSet = newValSet
 		}
+		// cache block fork hash
+		snap.RecentForkHashes[number] = hex.EncodeToString(header.Extra[ExtraVanity-nextForkHashSize : ExtraVanity])
 	}
 	snap.Number += uint64(len(headers))
 	snap.Hash = headers[len(headers)-1].Hash()
@@ -191,6 +268,12 @@ func (s *Snapshot) validatorCount() int {
 func (s *Snapshot) includeValidator(validator common.Address) bool {
 	_, exists := s.validatorSet[validator]
 	return exists
+}
+
+// inturn returns if a validator at a given block height is in-turn or not.
+func (s *Snapshot) inturn(validator common.Address) bool {
+	offset := (s.Number + 1) % uint64(len(s.Validators))
+	return s.Validators[offset] == validator
 }
 
 // Is header number distance enough to do dirty flush
@@ -223,6 +306,25 @@ func (s *Snapshot) indexOfVal(validator common.Address) int {
 		}
 	}
 	return -1
+}
+
+func (s *Snapshot) supposeValidator() common.Address {
+	index := (s.Number + 1) % uint64(len(s.Validators))
+	return s.Validators[index]
+}
+
+func parseValidators(validatorsBytes []byte) ([]common.Address, error) {
+	if len(validatorsBytes)%validatorBytesLength != 0 {
+		return nil, errors.New("invalid validators bytes")
+	}
+	n := len(validatorsBytes) / validatorBytesLength
+	result := make([]common.Address, n)
+	for i := 0; i < n; i++ {
+		address := make([]byte, validatorBytesLength)
+		copy(address, validatorsBytes[i*validatorBytesLength:(i+1)*validatorBytesLength])
+		result[i] = common.BytesToAddress(address)
+	}
+	return result, nil
 }
 
 func FindAncientHeader(header *types.Header, ite uint64, chain consensus.ChainHeaderReader, candidateParents []*types.Header) *types.Header {

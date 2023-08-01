@@ -198,6 +198,7 @@ var (
 		IBFT: &IBFTConfig{
 			EpochSize: 7200,
 			Type:      IBFTPoS,
+			BlockTime: 2,
 		},
 	}
 
@@ -219,6 +220,7 @@ var (
 		IBFT: &IBFTConfig{
 			EpochSize: 7200,
 			Type:      IBFTPoS,
+			BlockTime: 2,
 		},
 	}
 
@@ -451,6 +453,7 @@ const (
 type IBFTConfig struct {
 	EpochSize uint64   `json:"epochSize"`
 	Type      IBFTType `json:"type"`
+	BlockTime uint64   `json:"blockTime"`
 }
 
 // ParliaConfig is the consensus engine configs for proof-of-staked-authority based sealing.

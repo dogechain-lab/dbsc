@@ -29,6 +29,7 @@ import (
 )
 
 var (
+	// use this for caching system fee reward
 	SystemAddress = common.HexToAddress("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE")
 )
 

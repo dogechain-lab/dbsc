@@ -22,6 +22,18 @@ var (
 	_vaultContractAddr  = common.HexToAddress(dccontracts.DCVaultContract)
 )
 
+func (p *IBFT) handleBridgeEvents(state *state.StateDB, receipts []*types.Receipt) error {
+	// Handle bridge logs
+	for _, receipt := range receipts {
+		for _, rlog := range receipt.Logs {
+			if err := p.handleBridgeLog(rlog, state); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (p *IBFT) handleBridgeLog(log *types.Log, state *state.StateDB) error {
 	// Ensures it is a bridge log
 	if log.Address != _bridgeContractAddr {
@@ -31,13 +43,14 @@ func (p *IBFT) handleBridgeLog(log *types.Log, state *state.StateDB) error {
 	if len(log.Topics) == 0 {
 		return nil
 	}
-	// get event from topic
+	// Get event from topic.
+	// The ABI should be backward compatible
 	ev, err := p.bridgeABI.EventByID(log.Topics[0])
 	if err != nil {
 		return err
 	}
 
-	// use rawname for abi content matching
+	// Use rawname for bridge event matching
 	switch ev.RawName {
 	case _eventDeposited:
 		deposited, err := parseDepositedEvent(p.bridgeABI, ev, log)

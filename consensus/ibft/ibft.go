@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"strings"
@@ -24,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/dccontracts"
+	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -32,7 +34,9 @@ import (
 	"github.com/ethereum/go-ethereum/internal/ethapi"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 )
 
 const (
@@ -41,8 +45,13 @@ const (
 
 	checkpointInterval = 1024           // Number of blocks after which to save the snapshot to the database
 	defaultEpochLength = uint64(100000) // Default number of blocks of checkpoint to update validatorSet from contract
+	defaultBlockTime   = uint64(2)      // Default seconds between blocks
 
-	ExtraVanity = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
+	// IBFT signature extra data
+
+	ExtraVanity      = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
+	extraSeal        = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
+	nextForkHashSize = 4  // Fixed number of extra-data suffix bytes reserved for nextForkHash.
 )
 
 const (
@@ -59,7 +68,8 @@ var (
 		common.HexToAddress(dccontracts.DCVaultContract):  true,
 	}
 
-	targetBlockTime = 2 * time.Second // currently set by default, should move to genesis configs
+	diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
+	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -71,8 +81,9 @@ var (
 	// that is not part of the local blockchain.
 	errUnknownBlock = errors.New("unknown block")
 
-	// errInvalidBlockTimestamp is returned when it is a future block.
-	errInvalidBlockTimestamp = errors.New("invalid block timestamp")
+	// errMissingSignature is returned if a block's extra-data section doesn't seem
+	// to contain a 65 byte secp256k1 signature.
+	errMissingSignature = errors.New("extra-data 65 byte signature suffix missing")
 
 	// errInvalidCommittedSeal is returned when committed seal not from valid validators.
 	errInvalidCommittedSeal = errors.New("invalid committed seal")
@@ -85,6 +96,10 @@ var (
 
 	// errInvalidUncleHash is returned if a block contains an non-empty uncle list.
 	errInvalidUncleHash = errors.New("non empty uncle hash")
+
+	// errMismatchingEpochValidators is returned if a sprint block contains a
+	// list of validators different than the one the local node calculated.
+	errMismatchingEpochValidators = errors.New("mismatching validator list on epoch block")
 
 	// errInvalidDifficulty is returned if the difficulty of a block is missing.
 	errInvalidDifficulty = errors.New("invalid difficulty")
@@ -99,6 +114,10 @@ var (
 
 	// errUnauthorizedValidator is returned if a header is signed by a non-authorized entity.
 	errUnauthorizedValidator = errors.New("unauthorized validator")
+
+	// errRecentlySigned is returned if a header is signed by an authorized entity
+	// that already signed a header recently, thus is temporarily not allowed to.
+	errRecentlySigned = errors.New("recently signed")
 )
 
 // SignerFn is a signer callback function to request a header to be signed by a
@@ -110,6 +129,37 @@ func isToSystemContract(to common.Address) bool {
 	return systemContracts[to]
 }
 
+// // ecrecover extracts the Ethereum account address from a signed header.
+// func ecrecover(header *types.Header, sigCache *lru.ARCCache, chainId *big.Int) (common.Address, error) {
+// 	// If the signature's already cached, return that
+// 	hash := header.Hash()
+// 	if address, known := sigCache.Get(hash); known {
+// 		return address.(common.Address), nil
+// 	}
+
+// 	// get the extra part that contains the seal
+// 	extra, err := types.GetIbftExtra(header.Extra)
+// 	if err != nil {
+// 		return common.Address{}, err
+// 	}
+
+// 	// Retrieve the signature from the header extra-data
+// 	// Recover the public key and the Ethereum address
+// 	// NOTE: should be use different hash from IBFT for
+// 	// not modified block hash?
+// 	pubkey, err := crypto.Ecrecover(crypto.Keccak256(hash.Bytes()), extra.Seal)
+// 	if err != nil {
+// 		return common.Address{}, err
+// 	}
+// 	var signer common.Address
+// 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
+
+// 	// save to cache
+// 	sigCache.Add(hash, signer)
+
+// 	return signer, nil
+// }
+
 // ecrecover extracts the Ethereum account address from a signed header.
 func ecrecover(header *types.Header, sigCache *lru.ARCCache, chainId *big.Int) (common.Address, error) {
 	// If the signature's already cached, return that
@@ -117,27 +167,21 @@ func ecrecover(header *types.Header, sigCache *lru.ARCCache, chainId *big.Int) (
 	if address, known := sigCache.Get(hash); known {
 		return address.(common.Address), nil
 	}
-
-	// get the extra part that contains the seal
-	extra, err := types.GetIbftExtra(header.Extra)
-	if err != nil {
-		return common.Address{}, err
-	}
-
 	// Retrieve the signature from the header extra-data
+	if len(header.Extra) < extraSeal {
+		return common.Address{}, errMissingSignature
+	}
+	signature := header.Extra[len(header.Extra)-extraSeal:]
+
 	// Recover the public key and the Ethereum address
-	// TODO: should be use different hash from IBFT for
-	// not modified block hash?
-	pubkey, err := crypto.Ecrecover(crypto.Keccak256(hash.Bytes()), extra.Seal)
+	pubkey, err := crypto.Ecrecover(SealHash(header, chainId).Bytes(), signature)
 	if err != nil {
 		return common.Address{}, err
 	}
 	var signer common.Address
 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
 
-	// save to cache
 	sigCache.Add(hash, signer)
-
 	return signer, nil
 }
 
@@ -178,6 +222,10 @@ func New(
 	// Set any missing consensus parameters to their defaults
 	if ibftConfig != nil && ibftConfig.EpochSize == 0 {
 		ibftConfig.EpochSize = defaultEpochLength
+	}
+
+	if ibftConfig != nil && ibftConfig.BlockTime == 0 {
+		ibftConfig.BlockTime = defaultBlockTime
 	}
 
 	// Allocate the snapshot caches and create the engine
@@ -351,38 +399,78 @@ func (p *IBFT) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 	if header.UncleHash != types.EmptyUncleHash {
 		return errInvalidUncleHash
 	}
-	// Difficulty has to match number for previous ibft consensus
-	if header.Number.Cmp(header.Difficulty) != 0 {
-		return errInvalidDifficulty
-	}
 
-	// Check timestamp after detroit hard fork
-	if p.chainConfig.IsDetorit(header.Number) {
-		// Get parent
-		var parent *types.Header
-		if len(parents) > 0 {
-			parent = parents[len(parents)-1]
-		} else {
-			parent = chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
-		}
-		// The diff between block timestamp and 'now' should not exceeds timeout.
-		// Timestamp ascending array [parentTs, blockTs, now+blockTimeout]
-		before, after := parent.Time, uint64(time.Now().Add(targetBlockTime).Unix())
+	number := header.Number.Uint64()
 
-		// header timestamp should not goes back
-		if header.Time <= before || header.Time > after {
-			log.Warn("future blocktime invalid",
-				"before", before,
-				"after", after,
-				"current", header.Time,
-			)
-
-			return errInvalidBlockTimestamp
+	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
+	if number > 0 {
+		if header.Difficulty == nil {
+			return errInvalidDifficulty
 		}
 	}
 
-	// Verify the sealer
+	// Verify that the gas limit is <= 2^63-1
+	capacity := uint64(0x7fffffffffffffff)
+	if header.GasLimit > capacity {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, capacity)
+	}
+	// Verify that the gasUsed is <= gasLimit
+	if header.GasUsed > header.GasLimit {
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
+	}
+
+	parent, err := p.getParent(chain, header, parents)
+	if err != nil {
+		return err
+	}
+
+	snap, err := p.snapshot(chain, number-1, header.ParentHash, parents)
+	if err != nil {
+		return err
+	}
+
+	// Verify timestamp
+	if err := p.blockTimeVerifyForHawaiiFork(snap, header, parent); err != nil {
+		return err
+	}
+
+	// Verify that the gas limit remains within allowed bounds
+	if err := p.verifyGasLimit(parent, header); err != nil {
+		return err
+	}
+
+	// Verify the signer
 	return p.verifySigner(chain, header, parents)
+}
+
+func (p *IBFT) verifyGasLimit(parent, header *types.Header) error {
+	diff := int64(parent.GasLimit) - int64(header.GasLimit)
+	if diff < 0 {
+		diff *= -1
+	}
+	limit := parent.GasLimit / params.GasLimitBoundDivisor
+
+	if uint64(diff) >= limit || header.GasLimit < params.MinGasLimit {
+		return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
+	}
+
+	return nil
+}
+
+// getParent returns the parent of a given block.
+func (p *IBFT) getParent(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) (*types.Header, error) {
+	var parent *types.Header
+	number := header.Number.Uint64()
+	if len(parents) > 0 {
+		parent = parents[len(parents)-1]
+	} else {
+		parent = chain.GetHeader(header.ParentHash, number-1)
+	}
+
+	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
+		return nil, consensus.ErrUnknownAncestor
+	}
+	return parent, nil
 }
 
 func (p *IBFT) verifySigner(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
@@ -513,59 +601,208 @@ func (p *IBFT) VerifyUncles(chain consensus.ChainReader, block *types.Block) err
 	return nil
 }
 
-// VerifySeal implements consensus.Engine, checking whether the signature contained
-// in the header satisfies the consensus protocol requirements.
-func (p *IBFT) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
-	return p.verifySeal(chain, header, nil)
-}
-
-// verifySeal checks whether the signature contained in the header satisfies the
-// consensus protocol requirements. The method accepts an optional list of parent
-// headers that aren't yet part of the local blockchain to generate the snapshots
-// from.
-func (p *IBFT) verifySeal(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
-	return nil
-}
-
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (p *IBFT) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+	header.Coinbase = p.val
+	header.Nonce = types.BlockNonce{}
+	header.MixDigest = types.IBFTMixHash
+	header.UncleHash = types.EmptyRootHash // empty uncle
+
+	number := header.Number.Uint64()
+	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+	if err != nil {
+		return err
+	}
+
+	// Set the correct difficulty
+	header.Difficulty = calcDifficulty(snap, p.val)
+
+	// Ensure the extra data has all it's components
+	if len(header.Extra) < ExtraVanity-nextForkHashSize {
+		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, ExtraVanity-nextForkHashSize-len(header.Extra))...)
+	}
+	header.Extra = header.Extra[:ExtraVanity-nextForkHashSize]
+	nextForkHash := forkid.NextForkHash(p.chainConfig, p.genesisHash, number)
+	header.Extra = append(header.Extra, nextForkHash[:]...)
+	if number%p.config.EpochSize == 0 {
+		newValidators, err := p.getCurrentValidators(header.ParentHash, new(big.Int).Sub(header.Number, common.Big1))
+		if err != nil {
+			return err
+		}
+		// Use original sequence which should be sorted
+		for _, validator := range newValidators {
+			header.Extra = append(header.Extra, validator.Bytes()...)
+		}
+	}
+	// add extra seal space
+	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
+
+	// Ensure the timestamp has the correct delay
+	parent := chain.GetHeader(header.ParentHash, number-1)
+	if parent == nil {
+		return consensus.ErrUnknownAncestor
+	}
+	header.Time = p.blockTimeForHawaiiFork(snap, header, parent)
+	if header.Time < uint64(time.Now().Unix()) {
+		header.Time = uint64(time.Now().Unix())
+	}
 	return nil
 }
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
-// rewards given.
+// rewards given, bridge logs are handled.
 func (p *IBFT) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
 	uncles []*types.Header, receipts *[]*types.Receipt, systemTxs *[]*types.Transaction, usedGas *uint64) error {
+	// warn if not in majority fork
+	number := header.Number.Uint64()
+	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+	if err != nil {
+		return err
+	}
+	nextForkHash := forkid.NextForkHash(p.chainConfig, p.genesisHash, number)
+	if !snap.isMajorityFork(hex.EncodeToString(nextForkHash[:])) {
+		log.Debug("there is a possible fork, and your client is not the majority. Please check...", "nextForkHash", hex.EncodeToString(nextForkHash[:]))
+	}
+
+	// If the block is a epoch end block, verify the validator list
+	// The verification can only be done when the state is ready, it can't be done in VerifyHeader.
+	if header.Number.Uint64()%p.config.EpochSize == 0 {
+		newValidators, err := p.getCurrentValidators(header.ParentHash, new(big.Int).Sub(header.Number, common.Big1))
+		if err != nil {
+			return err
+		}
+		validatorsBytes := make([]byte, len(newValidators)*validatorBytesLength)
+		for i, validator := range newValidators {
+			copy(validatorsBytes[i*validatorBytesLength:], validator.Bytes())
+		}
+
+		extraSuffix := len(header.Extra) - extraSeal
+		if !bytes.Equal(header.Extra[ExtraVanity:extraSuffix], validatorsBytes) {
+			return errMismatchingEpochValidators
+		}
+	}
+
 	// Apply system transactions at last.
-	if systemTxs != nil && len(*systemTxs) > 0 {
-		ctx := chainContext{Chain: chain, ibft: p}
-		for _, tx := range *systemTxs {
-			// Sender should be verified, so we simply set coinbase here
-			msg := p.tx2SystemMessage(tx, header.Coinbase)
-			if err := p.applyTransaction(msg, state, header, ctx, txs, receipts, systemTxs, usedGas, false); err != nil {
-				return err
+	ctx := chainContext{Chain: chain, ibft: p}
+	if header.Difficulty.Cmp(diffInTurn) != 0 {
+		// Some one need to be slashed
+		spoiledVal := snap.supposeValidator()
+		signedRecently := false
+		for _, recent := range snap.Recents {
+			if recent == spoiledVal {
+				signedRecently = true
+				break
+			}
+		}
+		if !signedRecently {
+			log.Trace("slash validator", "block hash", header.Hash(), "address", spoiledVal)
+			err = p.slash([]common.Address{spoiledVal}, state, header, ctx, txs, receipts, systemTxs, usedGas, false)
+			if err != nil {
+				// it is possible that slash validator failed because of the slash channel is disabled.
+				log.Error("slash validator failed", "block hash", header.Hash(), "address", spoiledVal)
 			}
 		}
 	}
 
-	// Handle bridge logs
-	for _, receipt := range *receipts {
-		for _, rlog := range receipt.Logs {
-			if err := p.handleBridgeLog(rlog, state); err != nil {
-				return err
-			}
-		}
+	val := header.Coinbase
+	if err := p.distributeToValidator(val, state, header, ctx, txs, receipts, systemTxs, usedGas, false); err != nil {
+		return err
 	}
 
-	return nil
+	if len(*systemTxs) > 0 {
+		return errors.New("the length of systemTxs do not match")
+	}
+	// if systemTxs != nil && len(*systemTxs) > 0 {
+	// 	for _, tx := range *systemTxs {
+	// 		// Sender should be verified, so we simply set coinbase here
+	// 		msg := p.tx2SystemMessage(tx, header.Coinbase)
+	// 		if err := p.applyTransaction(msg, state, header, ctx, txs, receipts, systemTxs, usedGas, false); err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
+
+	// Handle bridge events
+	return p.handleBridgeEvents(state, *receipts)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
-// nor block rewards given, and returns the final block.
+// nor block rewards given, bridge logs are handled, and returns the final block.
 func (p *IBFT) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB,
 	txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, []*types.Receipt, error) {
-	return nil, nil, nil
+	// No block rewards in PoA, so the state remains as is and uncles are dropped
+	cx := chainContext{Chain: chain, ibft: p}
+	if txs == nil {
+		txs = make([]*types.Transaction, 0)
+	}
+	if receipts == nil {
+		receipts = make([]*types.Receipt, 0)
+	}
+
+	// check out whether sealer is out of turn
+	if header.Difficulty.Cmp(diffInTurn) != 0 {
+		number := header.Number.Uint64()
+
+		snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Expected validator in turn, but we don't care about every block
+		// it must sign. It is OK to go, if it signed recently.
+		spoiledVal := snap.supposeValidator()
+		signedRecently := false
+		for _, recent := range snap.Recents {
+			if recent == spoiledVal {
+				signedRecently = true
+				break
+			}
+		}
+		if !signedRecently {
+			// Slash validator who didn't sign recently
+			err = p.slash([]common.Address{spoiledVal}, state, header, cx, &txs, &receipts, nil, &header.GasUsed, true)
+			if err != nil {
+				// Possible failure because of the slash channel is disabled.
+				// DC contract not implement this feature, so it is only in case.
+				log.Error("slash validator failed", "block hash", header.Hash(), "address", spoiledVal)
+			}
+		}
+	}
+
+	// system reward
+	if err := p.distributeToValidator(p.val, state, header, cx, &txs, &receipts, nil, &header.GasUsed, true); err != nil {
+		return nil, nil, err
+	}
+
+	// bridge events
+	if err := p.handleBridgeEvents(state, receipts); err != nil {
+		return nil, nil, err
+	}
+
+	// should not happen. Once happen, stop the node is better than broadcast the block
+	if header.GasLimit < header.GasUsed {
+		return nil, nil, errors.New("gas consumption of system txs exceed the gas limit")
+	}
+
+	// calculate root
+	var blk *types.Block
+	var rootHash common.Hash
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		rootHash = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+		wg.Done()
+	}()
+	go func() {
+		blk = types.NewBlock(header, txs, nil, receipts, trie.NewStackTrie(nil))
+		wg.Done()
+	}()
+	wg.Wait()
+	blk.SetRoot(rootHash)
+
+	// Assemble and return the final block for sealing
+	return blk, receipts, nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks
@@ -581,13 +818,130 @@ func (p *IBFT) Authorize(val common.Address, signFn SignerFn, signTxFn SignerTxF
 
 // Argument leftOver is the time reserved for block finalize(calculate root, distribute income...)
 func (p *IBFT) Delay(chain consensus.ChainReader, header *types.Header, leftOver *time.Duration) *time.Duration {
-	return nil
+	number := header.Number.Uint64()
+	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+	if err != nil {
+		return nil
+	}
+
+	delay := p.delayForHawaiiFork(snap, header)
+
+	if *leftOver >= time.Duration(p.config.BlockTime)*time.Second {
+		// ignore invalid leftOver
+		log.Error("Delay invalid argument", "leftOver", leftOver.String(), "BlockTime", p.config.BlockTime)
+	} else if *leftOver >= delay {
+		// no left time
+		delay = time.Duration(0)
+		return &delay
+	} else {
+		// delay
+		delay = delay - *leftOver
+	}
+
+	// The blocking time should be no more than half of period
+	half := time.Duration(p.config.BlockTime) * time.Second / 2
+	if delay > half {
+		delay = half
+	}
+	return &delay
 }
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (p *IBFT) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	header := block.Header()
+
+	// Sealing the genesis block is not supported
+	number := header.Number.Uint64()
+	if number == 0 {
+		return errUnknownBlock
+	}
+	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
+	if p.config.BlockTime == 0 && len(block.Transactions()) == 0 {
+		log.Info("Sealing paused, waiting for transactions")
+		return nil
+	}
+	// Don't hold the val fields for the entire sealing procedure
+	p.lock.RLock()
+	val, signFn := p.val, p.signFn
+	p.lock.RUnlock()
+
+	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+	if err != nil {
+		return err
+	}
+
+	// Bail out if we're unauthorized to sign a block
+	if _, authorized := snap.validatorSet[val]; !authorized {
+		return errUnauthorizedValidator
+	}
+
+	// If we're amongst the recent signers, wait for the next block
+	for seen, recent := range snap.Recents {
+		if recent == val {
+			// Signer is among recents, only wait if the current block doesn't shift it out
+			if limit := uint64(len(snap.Validators)/2 + 1); number < limit || seen > number-limit {
+				log.Info("Signed recently, must wait for others")
+				return nil
+			}
+		}
+	}
+
+	// Sweet, the protocol permits us to sign the block, wait for our time
+	delay := p.delayForHawaiiFork(snap, header)
+
+	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "val", val.Hex())
+
+	// Sign all the things!
+	sig, err := signFn(accounts.Account{Address: val}, accounts.MimetypeParlia, DcIBFTRLP(header, p.chainConfig.ChainID))
+	if err != nil {
+		return err
+	}
+	copy(header.Extra[len(header.Extra)-extraSeal:], sig)
+
+	// Wait until sealing is terminated or delay timeout.
+	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
+	go func() {
+		select {
+		case <-stop:
+			return
+		case <-time.After(delay):
+		}
+		if p.shouldWaitForCurrentBlockProcess(chain, header, snap) {
+			log.Info("Waiting for received in turn block to process")
+			select {
+			case <-stop:
+				log.Info("Received block process finished, abort block seal")
+				return
+			case <-time.After(time.Duration(processBackOffTime) * time.Second):
+				log.Info("Process backoff time exhausted, start to seal block")
+			}
+		}
+
+		select {
+		case results <- block.WithSeal(header):
+		default:
+			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header, p.chainConfig.ChainID))
+		}
+	}()
+
 	return nil
+}
+
+func (p *IBFT) shouldWaitForCurrentBlockProcess(chain consensus.ChainHeaderReader, header *types.Header, snap *Snapshot) bool {
+	if header.Difficulty.Cmp(diffInTurn) == 0 {
+		return false
+	}
+
+	highestVerifiedHeader := chain.GetHighestVerifiedHeader()
+	if highestVerifiedHeader == nil {
+		return false
+	}
+
+	if header.ParentHash == highestVerifiedHeader.ParentHash {
+		return true
+	}
+	return false
 }
 
 func (p *IBFT) EnoughDistance(chain consensus.ChainReader, header *types.Header) bool {
@@ -615,7 +969,25 @@ func (p *IBFT) IsLocalBlock(header *types.Header) bool {
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
 func (p *IBFT) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
+	// hawaii fork uses another difficulty adjustment algorithm
+	if p.chainConfig.IsHawaii(new(big.Int).Add(parent.Number, common.Big1)) {
+		snap, err := p.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
+		if err != nil {
+			return nil
+		}
+		return calcDifficulty(snap, p.val)
+	}
 	return difficultyByParentNumber(parent.Number)
+}
+
+// calcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
+// that a new block should have based on the previous blocks in the chain and the
+// current signer.
+func calcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
+	if snap.inturn(signer) {
+		return new(big.Int).Set(diffInTurn)
+	}
+	return new(big.Int).Set(diffNoTurn)
 }
 
 // old version ibft returns block number directly
@@ -625,15 +997,19 @@ func difficultyByParentNumber(num *big.Int) *big.Int {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (p *IBFT) SealHash(header *types.Header) common.Hash {
+	if p.chainConfig.IsHawaii(header.Number) {
+		return SealHash(header, p.chainConfig.ChainID)
+	}
+
 	extra, _ := types.GetIbftExtra(header.Extra)
-	return SealHash(header, p.chainConfig.ChainID, extra)
+	return SealDcIBFTHash(header, p.chainConfig.ChainID, extra)
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC API to query snapshot.
 func (p *IBFT) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	return []rpc.API{{
 		Namespace: "ibft",
-		Version:   "1.0",
+		Version:   "1.1",
 		Service:   &API{chain: chain, ibft: p},
 		Public:    false,
 	}}
@@ -685,10 +1061,8 @@ func (p *IBFT) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int)
 	}
 
 	valz := make([]common.Address, len(*ret0))
-	// nolint: gosimple
-	for i, a := range *ret0 {
-		valz[i] = a
-	}
+	copy(valz, *ret0)
+
 	return valz, nil
 }
 
@@ -713,7 +1087,7 @@ func (p *IBFT) slash(spoiledValidators []common.Address, state *state.StateDB, h
 }
 
 // slash spoiled validators
-func (p *IBFT) distributeToValidator(amount *big.Int, validator common.Address,
+func (p *IBFT) distributeToValidator(validator common.Address,
 	state *state.StateDB, header *types.Header, chain core.ChainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// method
@@ -728,7 +1102,7 @@ func (p *IBFT) distributeToValidator(amount *big.Int, validator common.Address,
 		return err
 	}
 	// get system message
-	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, amount)
+	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0)
 	// apply message
 	return p.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
@@ -747,18 +1121,18 @@ func (p *IBFT) getSystemMessage(from, toAddress common.Address, data []byte, val
 	}
 }
 
-func (p *IBFT) tx2SystemMessage(tx *types.Transaction, from common.Address) callmsg {
-	return callmsg{
-		ethereum.CallMsg{
-			From:     from,
-			Gas:      tx.Gas(),
-			GasPrice: big.NewInt(0), // It must be zero price
-			Value:    tx.Value(),
-			To:       tx.To(),
-			Data:     tx.Data(),
-		},
-	}
-}
+// func (p *IBFT) tx2SystemMessage(tx *types.Transaction, from common.Address) callmsg {
+// 	return callmsg{
+// 		ethereum.CallMsg{
+// 			From:     from,
+// 			Gas:      tx.Gas(),
+// 			GasPrice: big.NewInt(0), // It must be zero price
+// 			Value:    tx.Value(),
+// 			To:       tx.To(),
+// 			Data:     tx.Data(),
+// 		},
+// 	}
+// }
 
 func (p *IBFT) applyTransaction(
 	msg callmsg,
@@ -825,12 +1199,57 @@ func (p *IBFT) applyTransaction(
 }
 
 // ===========================     utility function        ==========================
-// SealHash returns the hash of a block prior to it being sealed.
-func SealHash(header *types.Header, chainId *big.Int, extra *types.IBFTExtra) (hash common.Hash) {
+// SealDcIBFTHash returns the hash of a block prior to it being sealed.
+func SealDcIBFTHash(header *types.Header, chainId *big.Int, extra *types.IBFTExtra) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
 	types.IBFTHeaderExtraRLPHash(hasher, header, extra)
 	hasher.Sum(hash[:0])
 	return hash
+}
+
+// SealHash returns the hash of a block prior to it being sealed.
+func SealHash(header *types.Header, chainId *big.Int) (hash common.Hash) {
+	hasher := sha3.NewLegacyKeccak256()
+	encodeSigHeader(hasher, header, chainId)
+	hasher.Sum(hash[:0])
+	return hash
+}
+
+// DcIBFTRLP returns the rlp bytes which needs to be signed for the parlia
+// sealing. The RLP to sign consists of the entire header apart from the 65 byte signature
+// contained at the end of the extra data.
+//
+// Note, the method requires the extra data to be at least 65 bytes, otherwise it
+// panics. This is done to avoid accidentally using both forms (signature present
+// or not), which could be abused to produce different hashes for the same header.
+func DcIBFTRLP(header *types.Header, chainId *big.Int) []byte {
+	b := new(bytes.Buffer)
+	encodeSigHeader(b, header, chainId)
+	return b.Bytes()
+}
+
+func encodeSigHeader(w io.Writer, header *types.Header, chainId *big.Int) {
+	err := rlp.Encode(w, []interface{}{
+		chainId,
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra[:len(header.Extra)-65], // this will panic if extra is too short, should check before calling encodeSigHeader
+		header.MixDigest,
+		header.Nonce,
+	})
+	if err != nil {
+		panic("can't encode: " + err.Error())
+	}
 }
 
 // chain context
