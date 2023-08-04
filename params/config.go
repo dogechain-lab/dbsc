@@ -24,6 +24,8 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	dc "github.com/dogechain-lab/dogechain/chain"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -430,8 +432,8 @@ func (c *CliqueConfig) String() string {
 }
 
 type DogeConfig struct {
-	DataDir         string `json:"datadir"`
-	GenesisFilePath string `json:"genesisFilePath"`
+	Genesis *dc.Genesis `json:"genesis"`
+	Params  *dc.Params  `json:"params"`
 }
 
 func (c *DogeConfig) String() string {

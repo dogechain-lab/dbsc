@@ -20,16 +20,6 @@ import (
 	"github.com/dogechain-lab/dogechain/state/runtime/precompiled"
 )
 
-func parseGenesis(genesisPath string) (*chain.Chain, error) {
-	if genesisConfig, parseErr := chain.Import(
-		genesisPath,
-	); parseErr != nil {
-		return nil, parseErr
-	} else {
-		return genesisConfig, nil
-	}
-}
-
 func newLevelDBBuilder(log hclog.Logger, path string) kvdb.LevelDBBuilder {
 	leveldbBuilder := kvdb.NewLevelDBBuilder(
 		log,
