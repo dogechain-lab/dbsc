@@ -250,7 +250,7 @@ type Config struct {
 func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.PublicBlockChainAPI, genesisHash common.Hash) (consensus.Engine, error) {
 	// dogechain consensus
 	if chainConfig.Doge != nil {
-		return dc.New(chainConfig, db, ee)
+		return dc.New(chainConfig, stack.Config(), db, ee)
 	}
 	// ibft
 	if chainConfig.IBFT != nil {

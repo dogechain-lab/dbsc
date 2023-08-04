@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dogechain-lab/dogechain/blockchain"
+	"github.com/dogechain-lab/dogechain/chain"
 	"github.com/dogechain-lab/dogechain/consensus"
 	"github.com/dogechain-lab/dogechain/consensus/ibft"
 	"github.com/dogechain-lab/dogechain/state"
@@ -15,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/dcmetrics"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/hashicorp/go-hclog"
@@ -72,13 +74,17 @@ func (dc *DogeChain) Close() error {
 
 func New(
 	chainConfig *params.ChainConfig,
+	config *node.Config,
 	db ethdb.Database,
 	ethAPI *ethapi.PublicBlockChainAPI,
 ) (*DogeChain, error) {
 	logger := hclog.L()
-	genesis, err := parseGenesis(chainConfig.Doge.GenesisFilePath)
-	if err != nil {
-		return nil, err
+	dataDir := filepath.Join(config.DataDir, "dogechain")
+
+	genesis := &chain.Chain{
+		Name:    "dogechain",
+		Genesis: chainConfig.Doge.Genesis,
+		Params:  chainConfig.Doge.Params,
 	}
 
 	var epochSize uint64 = defaultEpochLength
@@ -101,8 +107,8 @@ func New(
 		}
 	}
 
-	storageBuilder := newLevelDBBuilder(logger, filepath.Join(chainConfig.Doge.DataDir, "trie"))
-	storageBuilder.SetCacheSize(16384)
+	storageBuilder := newLevelDBBuilder(logger, filepath.Join(dataDir, "trie"))
+	storageBuilder.SetCacheSize(2048)
 
 	stateStorage, err := itrie.NewLevelDBStorage(
 		storageBuilder)
@@ -119,7 +125,7 @@ func New(
 		logger,
 		genesis,
 		wrapDcStateDb,
-		chainConfig.Doge.DataDir,
+		dataDir,
 		dcmetrics.SharedMetrics().Blockchain,
 		dcmetrics.SharedMetrics().Consensus,
 	)
