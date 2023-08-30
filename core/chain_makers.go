@@ -255,7 +255,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			misc.ApplyDAOHardFork(statedb)
 		}
 		// Upgrade system contracts in different protocols.
-		if config.IsIBFT(b.Number()) { // ibft
+		if config.IsIBFT(b.Number()) { // dbsc
 			dccontracts.UpgradeBuildInSystemContract(config, b.header.Number, statedb)
 		} else { // parlia by default
 			systemcontracts.UpgradeBuildInSystemContract(config, b.header.Number, statedb)

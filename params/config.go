@@ -195,10 +195,9 @@ var (
 		PortlandBlock:       big.NewInt(1981991),
 		DetroitBlock:        big.NewInt(4490834),
 
-		IBFT: &IBFTConfig{
-			EpochSize: 7200,
-			Type:      IBFTPoS,
+		Drab: &DrabConfig{
 			BlockTime: 2,
+			EpochSize: 7200,
 		},
 	}
 
@@ -217,10 +216,9 @@ var (
 		PortlandBlock:       big.NewInt(1065956),
 		DetroitBlock:        big.NewInt(2661202),
 
-		IBFT: &IBFTConfig{
-			EpochSize: 7200,
-			Type:      IBFTPoS,
+		Drab: &DrabConfig{
 			BlockTime: 2,
+			EpochSize: 7200,
 		},
 	}
 
@@ -411,7 +409,7 @@ type ChainConfig struct {
 	Clique *CliqueConfig `json:"clique,omitempty" toml:",omitempty"`
 	Parlia *ParliaConfig `json:"parlia,omitempty" toml:",omitempty"`
 	Doge   *DogeConfig   `json:"doge,omitempty" toml:",omitempty"`
-	IBFT   *IBFTConfig   `json:"ibft,omitempty" toml:",omitempty"`
+	Drab   *DrabConfig   `json:"drab,omitempty" toml:",omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -450,10 +448,9 @@ const (
 )
 
 // ParliaConfig is the consensus engine configs for istanbul-byzantium-fault-tolarance based sealing.
-type IBFTConfig struct {
-	EpochSize uint64   `json:"epochSize"`
-	Type      IBFTType `json:"type"`
-	BlockTime uint64   `json:"blockTime"`
+type DrabConfig struct {
+	BlockTime uint64 `json:"blockTime"`
+	EpochSize uint64 `json:"epochSize"`
 }
 
 // ParliaConfig is the consensus engine configs for proof-of-staked-authority based sealing.
@@ -471,8 +468,8 @@ func (b *ParliaConfig) String() string {
 func (c *ChainConfig) String() string {
 	var engine interface{}
 	switch {
-	case c.IBFT != nil:
-		engine = c.IBFT
+	case c.Drab != nil:
+		engine = c.Drab
 	case c.Doge != nil:
 		engine = c.Doge
 	case c.Ethash != nil:

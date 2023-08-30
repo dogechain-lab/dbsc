@@ -986,7 +986,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 
 	// Handle upgrade build-in system contract code
-	if w.chainConfig.IsIBFT(header.Number) { // ibft
+	if w.chainConfig.IsIBFT(header.Number) { // dbsc
 		dccontracts.UpgradeBuildInSystemContract(w.chainConfig, header.Number, env.state)
 	} else { // parlia by default
 		systemcontracts.UpgradeBuildInSystemContract(w.chainConfig, header.Number, env.state)

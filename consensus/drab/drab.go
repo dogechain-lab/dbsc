@@ -1,4 +1,4 @@
-package ibft
+package drab
 
 import (
 	"bytes"
@@ -47,7 +47,7 @@ const (
 	defaultEpochLength = uint64(100000) // Default number of blocks of checkpoint to update validatorSet from contract
 	defaultBlockTime   = uint64(2)      // Default seconds between blocks
 
-	// IBFT signature extra data
+	// signature extra data
 
 	ExtraVanity      = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
 	extraSeal        = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
@@ -129,37 +129,6 @@ func isToSystemContract(to common.Address) bool {
 	return systemContracts[to]
 }
 
-// // ecrecover extracts the Ethereum account address from a signed header.
-// func ecrecover(header *types.Header, sigCache *lru.ARCCache, chainId *big.Int) (common.Address, error) {
-// 	// If the signature's already cached, return that
-// 	hash := header.Hash()
-// 	if address, known := sigCache.Get(hash); known {
-// 		return address.(common.Address), nil
-// 	}
-
-// 	// get the extra part that contains the seal
-// 	extra, err := types.GetIbftExtra(header.Extra)
-// 	if err != nil {
-// 		return common.Address{}, err
-// 	}
-
-// 	// Retrieve the signature from the header extra-data
-// 	// Recover the public key and the Ethereum address
-// 	// NOTE: should be use different hash from IBFT for
-// 	// not modified block hash?
-// 	pubkey, err := crypto.Ecrecover(crypto.Keccak256(hash.Bytes()), extra.Seal)
-// 	if err != nil {
-// 		return common.Address{}, err
-// 	}
-// 	var signer common.Address
-// 	copy(signer[:], crypto.Keccak256(pubkey[1:])[12:])
-
-// 	// save to cache
-// 	sigCache.Add(hash, signer)
-
-// 	return signer, nil
-// }
-
 // ecrecover extracts the Ethereum account address from a signed header.
 func ecrecover(header *types.Header, sigCache *lru.ARCCache, chainId *big.Int) (common.Address, error) {
 	// If the signature's already cached, return that
@@ -185,10 +154,10 @@ func ecrecover(header *types.Header, sigCache *lru.ARCCache, chainId *big.Int) (
 	return signer, nil
 }
 
-// IBFT is the consensus engine of DBSC
-type IBFT struct {
+// Drab is the consensus engine of DBSC
+type Drab struct {
 	chainConfig *params.ChainConfig // Chain config
-	config      *params.IBFTConfig  // Consensus engine configuration parameters for ibft consensus
+	config      *params.DrabConfig  // Consensus engine configuration parameters for drab consensus
 	genesisHash common.Hash
 	db          ethdb.Database // Database to store and retrieve snapshot checkpoints
 
@@ -209,23 +178,23 @@ type IBFT struct {
 	vaultABI        *abi.ABI
 }
 
-// New creates a IBFT consensus engine.
+// New creates a Drab consensus engine.
 func New(
 	chainConfig *params.ChainConfig,
 	db ethdb.Database,
 	ethAPI *ethapi.PublicBlockChainAPI,
 	genesisHash common.Hash,
-) *IBFT {
-	// get ibft config
-	ibftConfig := chainConfig.IBFT
+) *Drab {
+	// get config
+	cfg := chainConfig.Drab
 
 	// Set any missing consensus parameters to their defaults
-	if ibftConfig != nil && ibftConfig.EpochSize == 0 {
-		ibftConfig.EpochSize = defaultEpochLength
+	if cfg != nil && cfg.EpochSize == 0 {
+		cfg.EpochSize = defaultEpochLength
 	}
 
-	if ibftConfig != nil && ibftConfig.BlockTime == 0 {
-		ibftConfig.BlockTime = defaultBlockTime
+	if cfg != nil && cfg.BlockTime == 0 {
+		cfg.BlockTime = defaultBlockTime
 	}
 
 	// Allocate the snapshot caches and create the engine
@@ -252,9 +221,9 @@ func New(
 		panic(err)
 	}
 
-	c := &IBFT{
+	c := &Drab{
 		chainConfig:     chainConfig,
-		config:          ibftConfig,
+		config:          cfg,
 		genesisHash:     genesisHash,
 		db:              db,
 		ethAPI:          ethAPI,
@@ -269,14 +238,14 @@ func New(
 	return c
 }
 
-func (p *IBFT) shouldWriteSystemTransactions(header *types.Header) bool {
+func (p *Drab) shouldWriteSystemTransactions(header *types.Header) bool {
 	// Begin with detroit hard fork, we do get some "system transactions",
 	// but we don't treat them as system transactions and make direct
 	// contract call only after hawaii hard fork.
 	return p.chainConfig.IsHawaii(header.Number)
 }
 
-func (p *IBFT) IsSystemTransaction(tx *types.Transaction, header *types.Header) (bool, error) {
+func (p *Drab) IsSystemTransaction(tx *types.Transaction, header *types.Header) (bool, error) {
 	// Ensures activeness
 	if !p.shouldWriteSystemTransactions(header) {
 		return false, nil
@@ -310,7 +279,7 @@ func (p *IBFT) IsSystemTransaction(tx *types.Transaction, header *types.Header) 
 	return false, nil
 }
 
-func (p *IBFT) isValidatorDepositTxSignature(tx *types.Transaction) bool {
+func (p *Drab) isValidatorDepositTxSignature(tx *types.Transaction) bool {
 	// Ensures matching contract
 	if *tx.To() != _validatorsetContract {
 		return false
@@ -329,7 +298,7 @@ func (p *IBFT) isValidatorDepositTxSignature(tx *types.Transaction) bool {
 	return bytes.EqualFold(tx.Data()[:4], method.ID)
 }
 
-func (p *IBFT) isValidatorSlashTxSignature(tx *types.Transaction) bool {
+func (p *Drab) isValidatorSlashTxSignature(tx *types.Transaction) bool {
 	// Ensures matching contract
 	if *tx.To() != _validatorsetContract {
 		return false
@@ -348,7 +317,7 @@ func (p *IBFT) isValidatorSlashTxSignature(tx *types.Transaction) bool {
 	return bytes.EqualFold(tx.Data()[:4], method.ID)
 }
 
-func (p *IBFT) IsSystemContract(to *common.Address) bool {
+func (p *Drab) IsSystemContract(to *common.Address) bool {
 	if to == nil {
 		return false
 	}
@@ -356,19 +325,19 @@ func (p *IBFT) IsSystemContract(to *common.Address) bool {
 }
 
 // Author implements consensus.Engine, returning the SystemAddress
-func (p *IBFT) Author(header *types.Header) (common.Address, error) {
+func (p *Drab) Author(header *types.Header) (common.Address, error) {
 	return header.Coinbase, nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
-func (p *IBFT) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
+func (p *Drab) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
 	return p.verifyHeader(chain, header, nil)
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers. The
 // method returns a quit channel to abort the operations and a results channel to
 // retrieve the async verifications (the order is that of the input slice).
-func (p *IBFT) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (p *Drab) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
@@ -390,8 +359,8 @@ func (p *IBFT) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types
 // caller may optionally pass in a batch of parents (ascending order) to avoid
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
-func (p *IBFT) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
-	// Ensure that the mix digest is ibft mix hash
+func (p *Drab) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+	// Ensure that the mix digest is drab mix hash
 	if header.MixDigest != types.IBFTMixHash {
 		return types.ErrIBFTInvalidMixHash
 	}
@@ -443,7 +412,7 @@ func (p *IBFT) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 	return p.verifySigner(chain, header, parents)
 }
 
-func (p *IBFT) verifyGasLimit(parent, header *types.Header) error {
+func (p *Drab) verifyGasLimit(parent, header *types.Header) error {
 	diff := int64(parent.GasLimit) - int64(header.GasLimit)
 	if diff < 0 {
 		diff *= -1
@@ -458,7 +427,7 @@ func (p *IBFT) verifyGasLimit(parent, header *types.Header) error {
 }
 
 // getParent returns the parent of a given block.
-func (p *IBFT) getParent(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) (*types.Header, error) {
+func (p *Drab) getParent(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) (*types.Header, error) {
 	var parent *types.Header
 	number := header.Number.Uint64()
 	if len(parents) > 0 {
@@ -473,7 +442,7 @@ func (p *IBFT) getParent(chain consensus.ChainHeaderReader, header *types.Header
 	return parent, nil
 }
 
-func (p *IBFT) verifySigner(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+func (p *Drab) verifySigner(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
 	// Recover validator first
 	validator, err := ecrecover(header, p.signatures, p.chainConfig.ChainID)
 	if err != nil {
@@ -496,7 +465,7 @@ func (p *IBFT) verifySigner(chain consensus.ChainHeaderReader, header *types.Hea
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
-func (p *IBFT) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
+func (p *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
 	var (
 		headers []*types.Header
@@ -594,7 +563,7 @@ func (p *IBFT) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 
 // VerifyUncles implements consensus.Engine, always returning an error for any
 // uncles as this consensus mechanism doesn't permit uncles.
-func (p *IBFT) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+func (p *Drab) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	if len(block.Uncles()) > 0 {
 		return errors.New("uncles not allowed")
 	}
@@ -603,7 +572,7 @@ func (p *IBFT) VerifyUncles(chain consensus.ChainReader, block *types.Block) err
 
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
-func (p *IBFT) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+func (p *Drab) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
 	header.Coinbase = p.val
 	header.Nonce = types.BlockNonce{}
 	header.MixDigest = types.IBFTMixHash
@@ -652,7 +621,7 @@ func (p *IBFT) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given, bridge logs are handled.
-func (p *IBFT) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
+func (p *Drab) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
 	uncles []*types.Header, receipts *[]*types.Receipt, systemTxs *[]*types.Transaction, usedGas *uint64) error {
 	// warn if not in majority fork
 	number := header.Number.Uint64()
@@ -684,7 +653,7 @@ func (p *IBFT) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 	}
 
 	// Apply system transactions at last.
-	ctx := chainContext{Chain: chain, ibft: p}
+	ctx := chainContext{Chain: chain, engine: p}
 	if header.Difficulty.Cmp(diffInTurn) != 0 {
 		// Some one need to be slashed
 		spoiledVal := snap.supposeValidator()
@@ -729,10 +698,10 @@ func (p *IBFT) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, bridge logs are handled, and returns the final block.
-func (p *IBFT) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB,
+func (p *Drab) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB,
 	txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, []*types.Receipt, error) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
-	cx := chainContext{Chain: chain, ibft: p}
+	cx := chainContext{Chain: chain, engine: p}
 	if txs == nil {
 		txs = make([]*types.Transaction, 0)
 	}
@@ -807,7 +776,7 @@ func (p *IBFT) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
-func (p *IBFT) Authorize(val common.Address, signFn SignerFn, signTxFn SignerTxFn) {
+func (p *Drab) Authorize(val common.Address, signFn SignerFn, signTxFn SignerTxFn) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -817,7 +786,7 @@ func (p *IBFT) Authorize(val common.Address, signFn SignerFn, signTxFn SignerTxF
 }
 
 // Argument leftOver is the time reserved for block finalize(calculate root, distribute income...)
-func (p *IBFT) Delay(chain consensus.ChainReader, header *types.Header, leftOver *time.Duration) *time.Duration {
+func (p *Drab) Delay(chain consensus.ChainReader, header *types.Header, leftOver *time.Duration) *time.Duration {
 	number := header.Number.Uint64()
 	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
 	if err != nil {
@@ -848,7 +817,7 @@ func (p *IBFT) Delay(chain consensus.ChainReader, header *types.Header, leftOver
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
-func (p *IBFT) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+func (p *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
@@ -928,7 +897,7 @@ func (p *IBFT) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	return nil
 }
 
-func (p *IBFT) shouldWaitForCurrentBlockProcess(chain consensus.ChainHeaderReader, header *types.Header, snap *Snapshot) bool {
+func (p *Drab) shouldWaitForCurrentBlockProcess(chain consensus.ChainHeaderReader, header *types.Header, snap *Snapshot) bool {
 	if header.Difficulty.Cmp(diffInTurn) == 0 {
 		return false
 	}
@@ -944,7 +913,7 @@ func (p *IBFT) shouldWaitForCurrentBlockProcess(chain consensus.ChainHeaderReade
 	return false
 }
 
-func (p *IBFT) EnoughDistance(chain consensus.ChainReader, header *types.Header) bool {
+func (p *Drab) EnoughDistance(chain consensus.ChainReader, header *types.Header) bool {
 	snap, err := p.snapshot(chain, header.Number.Uint64()-1, header.ParentHash, nil)
 	if err != nil {
 		return true
@@ -952,7 +921,7 @@ func (p *IBFT) EnoughDistance(chain consensus.ChainReader, header *types.Header)
 	return snap.enoughDistance(p.val, header)
 }
 
-func (p *IBFT) AllowLightProcess(chain consensus.ChainReader, currentHeader *types.Header) bool {
+func (p *Drab) AllowLightProcess(chain consensus.ChainReader, currentHeader *types.Header) bool {
 	snap, err := p.snapshot(chain, currentHeader.Number.Uint64()-1, currentHeader.ParentHash, nil)
 	if err != nil {
 		return true
@@ -961,14 +930,14 @@ func (p *IBFT) AllowLightProcess(chain consensus.ChainReader, currentHeader *typ
 	return !snap.includeValidator(p.val)
 }
 
-func (p *IBFT) IsLocalBlock(header *types.Header) bool {
+func (p *Drab) IsLocalBlock(header *types.Header) bool {
 	return p.val == header.Coinbase
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
-func (p *IBFT) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
+func (p *Drab) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
 	// hawaii fork uses another difficulty adjustment algorithm
 	if p.chainConfig.IsHawaii(new(big.Int).Add(parent.Number, common.Big1)) {
 		snap, err := p.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
@@ -996,7 +965,7 @@ func difficultyByParentNumber(num *big.Int) *big.Int {
 }
 
 // SealHash returns the hash of a block prior to it being sealed.
-func (p *IBFT) SealHash(header *types.Header) common.Hash {
+func (p *Drab) SealHash(header *types.Header) common.Hash {
 	if p.chainConfig.IsHawaii(header.Number) {
 		return SealHash(header, p.chainConfig.ChainID)
 	}
@@ -1006,24 +975,24 @@ func (p *IBFT) SealHash(header *types.Header) common.Hash {
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC API to query snapshot.
-func (p *IBFT) APIs(chain consensus.ChainHeaderReader) []rpc.API {
+func (p *Drab) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	return []rpc.API{{
-		Namespace: "ibft",
-		Version:   "1.1",
-		Service:   &API{chain: chain, ibft: p},
+		Namespace: "drab",
+		Version:   "1.0",
+		Service:   &API{chain: chain, drab: p},
 		Public:    false,
 	}}
 }
 
 // Close implements consensus.Engine. It's a noop for ibft as there are no background threads.
-func (p *IBFT) Close() error {
+func (p *Drab) Close() error {
 	return nil
 }
 
 // ==========================  interaction with contract/account =========
 
 // getCurrentValidators get current validators
-func (p *IBFT) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int) ([]common.Address, error) {
+func (p *Drab) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int) ([]common.Address, error) {
 	// block
 	blockNr := rpc.BlockNumberOrHashWithHash(blockHash, false)
 
@@ -1067,7 +1036,7 @@ func (p *IBFT) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int)
 }
 
 // slash spoiled validators
-func (p *IBFT) slash(spoiledValidators []common.Address, state *state.StateDB, header *types.Header, chain core.ChainContext,
+func (p *Drab) slash(spoiledValidators []common.Address, state *state.StateDB, header *types.Header, chain core.ChainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// method
 	method := "slash"
@@ -1087,7 +1056,7 @@ func (p *IBFT) slash(spoiledValidators []common.Address, state *state.StateDB, h
 }
 
 // slash spoiled validators
-func (p *IBFT) distributeToValidator(validator common.Address,
+func (p *Drab) distributeToValidator(validator common.Address,
 	state *state.StateDB, header *types.Header, chain core.ChainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// method
@@ -1108,7 +1077,7 @@ func (p *IBFT) distributeToValidator(validator common.Address,
 }
 
 // get system message
-func (p *IBFT) getSystemMessage(from, toAddress common.Address, data []byte, value *big.Int) callmsg {
+func (p *Drab) getSystemMessage(from, toAddress common.Address, data []byte, value *big.Int) callmsg {
 	return callmsg{
 		ethereum.CallMsg{
 			From:     from,
@@ -1121,20 +1090,7 @@ func (p *IBFT) getSystemMessage(from, toAddress common.Address, data []byte, val
 	}
 }
 
-// func (p *IBFT) tx2SystemMessage(tx *types.Transaction, from common.Address) callmsg {
-// 	return callmsg{
-// 		ethereum.CallMsg{
-// 			From:     from,
-// 			Gas:      tx.Gas(),
-// 			GasPrice: big.NewInt(0), // It must be zero price
-// 			Value:    tx.Value(),
-// 			To:       tx.To(),
-// 			Data:     tx.Data(),
-// 		},
-// 	}
-// }
-
-func (p *IBFT) applyTransaction(
+func (p *Drab) applyTransaction(
 	msg callmsg,
 	state *state.StateDB,
 	header *types.Header,
@@ -1254,12 +1210,12 @@ func encodeSigHeader(w io.Writer, header *types.Header, chainId *big.Int) {
 
 // chain context
 type chainContext struct {
-	Chain consensus.ChainHeaderReader
-	ibft  consensus.Engine
+	Chain  consensus.ChainHeaderReader
+	engine consensus.Engine
 }
 
 func (c chainContext) Engine() consensus.Engine {
-	return c.ibft
+	return c.engine
 }
 
 func (c chainContext) GetHeader(hash common.Hash, number uint64) *types.Header {

@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/dc"
+	"github.com/ethereum/go-ethereum/consensus/drab"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/consensus/ibft"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -252,9 +252,9 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	if chainConfig.Doge != nil {
 		return dc.New(chainConfig, stack.Config(), db, ee)
 	}
-	// ibft
-	if chainConfig.IBFT != nil {
-		return ibft.New(chainConfig, db, ee, genesisHash), nil
+	// drab
+	if chainConfig.Drab != nil {
+		return drab.New(chainConfig, db, ee, genesisHash), nil
 	}
 	// parlia
 	if chainConfig.Parlia != nil {

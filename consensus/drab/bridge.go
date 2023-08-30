@@ -1,4 +1,4 @@
-package ibft
+package drab
 
 import (
 	"errors"
@@ -22,7 +22,7 @@ var (
 	_vaultContractAddr  = common.HexToAddress(dccontracts.DCVaultContract)
 )
 
-func (p *IBFT) handleBridgeEvents(state *state.StateDB, receipts []*types.Receipt) error {
+func (p *Drab) handleBridgeEvents(state *state.StateDB, receipts []*types.Receipt) error {
 	// Handle bridge logs
 	for _, receipt := range receipts {
 		for _, rlog := range receipt.Logs {
@@ -34,7 +34,7 @@ func (p *IBFT) handleBridgeEvents(state *state.StateDB, receipts []*types.Receip
 	return nil
 }
 
-func (p *IBFT) handleBridgeLog(log *types.Log, state *state.StateDB) error {
+func (p *Drab) handleBridgeLog(log *types.Log, state *state.StateDB) error {
 	// Ensures it is a bridge log
 	if log.Address != _bridgeContractAddr {
 		return nil

@@ -357,7 +357,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	if st.evm.ChainConfig().Parlia != nil { // parlia
 		// The fee should go to system address for later distribution.
 		st.state.AddBalance(consensus.SystemAddress, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
-	} else { // ibft, clique or others
+	} else { // drab, clique or others
 		effectiveTip := st.gasPrice
 		if rules.IsLondon {
 			effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))

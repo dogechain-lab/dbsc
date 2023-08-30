@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ibft
+package drab
 
 import (
 	"bytes"
@@ -35,11 +35,12 @@ import (
 
 const (
 	validatorBytesLength = common.AddressLength
+	snapshotKeyPrefix    = "drab-"
 )
 
 // Snapshot is the state of the validatorSet at a given point.
 type Snapshot struct {
-	config       *params.IBFTConfig // Consensus engine parameters to fine tune behavior
+	config       *params.DrabConfig // Consensus engine parameters to fine tune behavior
 	ethAPI       *ethapi.PublicBlockChainAPI
 	sigCache     *lru.ARCCache               // Cache of recent block signatures to speed up ecrecover
 	validatorSet map[common.Address]struct{} // validator set for quick query
@@ -55,7 +56,7 @@ type Snapshot struct {
 // method does not initialize the set of recent validators, so only ever use it for
 // the genesis block.
 func newSnapshot(
-	config *params.IBFTConfig,
+	config *params.DrabConfig,
 	sigCache *lru.ARCCache,
 	number uint64,
 	hash common.Hash,
@@ -80,8 +81,8 @@ func newSnapshot(
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.IBFTConfig, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) {
-	blob, err := db.Get(append([]byte("ibft-"), hash[:]...))
+func loadSnapshot(config *params.DrabConfig, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) {
+	blob, err := db.Get(append([]byte(snapshotKeyPrefix), hash[:]...))
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +108,7 @@ func (s *Snapshot) store(db ethdb.Database) error {
 	if err != nil {
 		return err
 	}
-	return db.Put(append([]byte("ibft-"), s.Hash[:]...), blob)
+	return db.Put(append([]byte(snapshotKeyPrefix), s.Hash[:]...), blob)
 }
 
 func (s *Snapshot) copyValidators() []common.Address {
@@ -216,10 +217,6 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainHeaderRea
 			}
 
 			// parse validators from extra
-			// extra, err := types.GetIbftExtra(checkpointHeader.Extra)
-			// if err != nil {
-			// 	return nil, err
-			// }
 			validatorBytes := checkpointHeader.Extra[ExtraVanity : len(checkpointHeader.Extra)-extraSeal]
 			// get validators from headers and use that for new validator set
 			newValArr, err := parseValidators(validatorBytes)

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ibft
+package drab
 
 import (
 	"github.com/ethereum/go-ethereum/common"
@@ -26,7 +26,7 @@ import (
 // API is a user facing RPC API to allow query snapshot and validators
 type API struct {
 	chain consensus.ChainHeaderReader
-	ibft  *IBFT
+	drab  *Drab
 }
 
 // GetSnapshot retrieves the state snapshot at a given block.
@@ -42,7 +42,7 @@ func (api *API) GetSnapshot(number *rpc.BlockNumber) (*Snapshot, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	return api.ibft.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.drab.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
 }
 
 // GetSnapshotAtHash retrieves the state snapshot at a given block.
@@ -51,7 +51,7 @@ func (api *API) GetSnapshotAtHash(hash common.Hash) (*Snapshot, error) {
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	return api.ibft.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	return api.drab.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
 }
 
 // GetValidators retrieves the list of validators at the specified block.
@@ -67,7 +67,7 @@ func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error)
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	snap, err := api.ibft.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.drab.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (api *API) GetValidatorsAtHash(hash common.Hash) ([]common.Address, error) 
 	if header == nil {
 		return nil, errUnknownBlock
 	}
-	snap, err := api.ibft.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
+	snap, err := api.drab.snapshot(api.chain, header.Number.Uint64(), header.Hash(), nil)
 	if err != nil {
 		return nil, err
 	}

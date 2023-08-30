@@ -1,4 +1,4 @@
-package ibft
+package drab
 
 import (
 	"math/rand"
@@ -11,14 +11,14 @@ import (
 )
 
 const (
-	wiggleTime           = uint64(1) // second, Random delay (per signer) to allow concurrent signers
-	initialBackOffTime   = uint64(1) // second
-	processBackOffTime   = uint64(1) // second
+	wiggleTime                 = uint64(1)              // second, Random delay (per signer) to allow concurrent signers
+	initialBackOffTime         = uint64(1)              // second
+	processBackOffTime         = uint64(1)              // second
 	wiggleTimeBeforeFork       = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 	fixedBackOffTimeBeforeFork = 200 * time.Millisecond
 )
 
-func (p *IBFT) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Duration {
+func (p *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Duration {
 	delay := time.Until(time.Unix(int64(header.Time), 0)) // nolint: gosimple
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
@@ -28,7 +28,7 @@ func (p *IBFT) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Dur
 	return delay
 }
 
-func (p *IBFT) blockTimeForHawaiiFork(snap *Snapshot, header, parent *types.Header) uint64 {
+func (p *Drab) blockTimeForHawaiiFork(snap *Snapshot, header, parent *types.Header) uint64 {
 	blockTime := parent.Time + p.config.BlockTime
 	if p.chainConfig.IsHawaii(header.Number) {
 		blockTime = blockTime + p.backOffTime(snap, header, p.val)
@@ -36,7 +36,7 @@ func (p *IBFT) blockTimeForHawaiiFork(snap *Snapshot, header, parent *types.Head
 	return blockTime
 }
 
-func (p *IBFT) blockTimeVerifyForHawaiiFork(snap *Snapshot, header, parent *types.Header) error {
+func (p *Drab) blockTimeVerifyForHawaiiFork(snap *Snapshot, header, parent *types.Header) error {
 	if p.chainConfig.IsHawaii(header.Number) {
 		if header.Time < parent.Time+p.config.BlockTime+p.backOffTime(snap, header, header.Coinbase) {
 			return consensus.ErrFutureBlock
@@ -45,7 +45,7 @@ func (p *IBFT) blockTimeVerifyForHawaiiFork(snap *Snapshot, header, parent *type
 	return nil
 }
 
-func (p *IBFT) backOffTime(snap *Snapshot, header *types.Header, val common.Address) uint64 {
+func (p *Drab) backOffTime(snap *Snapshot, header *types.Header, val common.Address) uint64 {
 	if snap.inturn(val) {
 		return 0
 	} else {
