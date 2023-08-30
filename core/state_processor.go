@@ -393,6 +393,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
+	// dogechain legacy block
 	if dc, ok := p.engine.(consensus.DC); ok {
 		return dc.Process(block, statedb)
 	}

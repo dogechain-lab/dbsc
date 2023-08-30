@@ -267,6 +267,17 @@ func (s *Snapshot) includeValidator(validator common.Address) bool {
 	return exists
 }
 
+// blockLimit returns block range limit to seal again.
+func (s *Snapshot) blockLimit() int {
+	vlen := len(s.Validators)
+	switch {
+	case vlen <= 4:
+		return vlen/3 + 1
+	default:
+		return vlen/2 + 1
+	}
+}
+
 // inturn returns if a validator at a given block height is in-turn or not.
 func (s *Snapshot) inturn(validator common.Address) bool {
 	offset := (s.Number + 1) % uint64(len(s.Validators))

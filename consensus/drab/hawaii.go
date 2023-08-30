@@ -18,7 +18,7 @@ const (
 	fixedBackOffTimeBeforeFork = 200 * time.Millisecond
 )
 
-func (p *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Duration {
+func (d *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Duration {
 	delay := time.Until(time.Unix(int64(header.Time), 0)) // nolint: gosimple
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
@@ -28,30 +28,30 @@ func (p *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Dur
 	return delay
 }
 
-func (p *Drab) blockTimeForHawaiiFork(snap *Snapshot, header, parent *types.Header) uint64 {
-	blockTime := parent.Time + p.config.BlockTime
-	if p.chainConfig.IsHawaii(header.Number) {
-		blockTime = blockTime + p.backOffTime(snap, header, p.val)
+func (d *Drab) blockTimeForHawaiiFork(snap *Snapshot, header, parent *types.Header) uint64 {
+	blockTime := parent.Time + d.config.BlockTime
+	if d.chainConfig.IsHawaii(header.Number) {
+		blockTime = blockTime + d.backOffTime(snap, header, d.val)
 	}
 	return blockTime
 }
 
-func (p *Drab) blockTimeVerifyForHawaiiFork(snap *Snapshot, header, parent *types.Header) error {
-	if p.chainConfig.IsHawaii(header.Number) {
-		if header.Time < parent.Time+p.config.BlockTime+p.backOffTime(snap, header, header.Coinbase) {
+func (d *Drab) blockTimeVerifyForHawaiiFork(snap *Snapshot, header, parent *types.Header) error {
+	if d.chainConfig.IsHawaii(header.Number) {
+		if header.Time < parent.Time+d.config.BlockTime+d.backOffTime(snap, header, header.Coinbase) {
 			return consensus.ErrFutureBlock
 		}
 	}
 	return nil
 }
 
-func (p *Drab) backOffTime(snap *Snapshot, header *types.Header, val common.Address) uint64 {
+func (d *Drab) backOffTime(snap *Snapshot, header *types.Header, val common.Address) uint64 {
 	if snap.inturn(val) {
 		return 0
 	} else {
 		delay := initialBackOffTime
 		validators := snap.Validators
-		if p.chainConfig.IsHawaii(header.Number) {
+		if d.chainConfig.IsHawaii(header.Number) {
 			// reverse the key/value of snap.Recents to get recentsMap
 			recentsMap := make(map[common.Address]uint64, len(snap.Recents))
 			bound := uint64(0)

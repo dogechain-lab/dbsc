@@ -29,6 +29,13 @@ var (
 	// The difference of extra between geth, bsc and dogechain (ibft) is that ibft uses zero instead of
 	// client version on prefix
 	IBFTExtraPrefix = common.Hash{}
+
+	// DrapMixHash represents a hash of drap consensus
+	// to identify whether the block reaches specific
+	// hard fork.
+	//
+	// Keccak256("Dogechain drab consensus")
+	DrapMixHash = common.HexToHash("0x13912b8b1e9f8bfbe6744f894d9ab0eb74ab0abb35049115b4b618961f4ec26f")
 )
 
 // IBFTExtra defines the structure of the extra field for I(stanbul)BFT

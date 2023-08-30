@@ -23,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/gopool"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/dccontracts"
 	"github.com/ethereum/go-ethereum/core/forkid"
@@ -54,11 +55,6 @@ const (
 	nextForkHashSize = 4  // Fixed number of extra-data suffix bytes reserved for nextForkHash.
 )
 
-const (
-	_validatorMethodDeposit = "deposit"
-	_validatorMethodSlash   = "slash"
-)
-
 var (
 	_validatorsetContract = common.HexToAddress(dccontracts.DCValidatorSetContract)
 
@@ -81,12 +77,21 @@ var (
 	// that is not part of the local blockchain.
 	errUnknownBlock = errors.New("unknown block")
 
+	// errMissingVanity is returned if a block's extra-data section is shorter than
+	// 32 bytes, which is required to store the signer vanity.
+	errMissingVanity = errors.New("extra-data 32 byte vanity prefix missing")
+
 	// errMissingSignature is returned if a block's extra-data section doesn't seem
 	// to contain a 65 byte secp256k1 signature.
 	errMissingSignature = errors.New("extra-data 65 byte signature suffix missing")
 
-	// errInvalidCommittedSeal is returned when committed seal not from valid validators.
-	errInvalidCommittedSeal = errors.New("invalid committed seal")
+	// errExtraValidators is returned if non-sprint-end block contain validator data in
+	// their extra-data fields.
+	errExtraValidators = errors.New("non-sprint-end block contains extra validator list")
+
+	// errInvalidSpanValidators is returned if a block contains an
+	// invalid list of validators (i.e. non divisible by 20 bytes).
+	errInvalidSpanValidators = errors.New("invalid validator list on sprint end block")
 
 	// errInvalidCoinbase is returned when coinbase not match with block sealer(validator).
 	errInvalidCoinbase = errors.New("invalid coinbase")
@@ -103,6 +108,10 @@ var (
 
 	// errInvalidDifficulty is returned if the difficulty of a block is missing.
 	errInvalidDifficulty = errors.New("invalid difficulty")
+
+	// errWrongDifficulty is returned if the difficulty of a block doesn't match the
+	// turn of the signer.
+	errWrongDifficulty = errors.New("wrong difficulty")
 
 	// errOutOfRangeChain is returned if an authorization list is attempted to
 	// be modified via out-of-range or non-contiguous headers.
@@ -155,6 +164,8 @@ func ecrecover(header *types.Header, sigCache *lru.ARCCache, chainId *big.Int) (
 }
 
 // Drab is the consensus engine of DBSC
+//
+// It is similar to parlia, implementing PoSA, too.
 type Drab struct {
 	chainConfig *params.ChainConfig // Chain config
 	config      *params.DrabConfig  // Consensus engine configuration parameters for drab consensus
@@ -238,16 +249,16 @@ func New(
 	return c
 }
 
-func (p *Drab) shouldWriteSystemTransactions(header *types.Header) bool {
+func (d *Drab) shouldWriteSystemTransactions(header *types.Header) bool {
 	// Begin with detroit hard fork, we do get some "system transactions",
 	// but we don't treat them as system transactions and make direct
 	// contract call only after hawaii hard fork.
-	return p.chainConfig.IsHawaii(header.Number)
+	return d.chainConfig.IsHawaii(header.Number)
 }
 
-func (p *Drab) IsSystemTransaction(tx *types.Transaction, header *types.Header) (bool, error) {
+func (d *Drab) IsSystemTransaction(tx *types.Transaction, header *types.Header) (bool, error) {
 	// Ensures activeness
-	if !p.shouldWriteSystemTransactions(header) {
+	if !d.shouldWriteSystemTransactions(header) {
 		return false, nil
 	}
 	// Deploy a contract.
@@ -259,7 +270,7 @@ func (p *Drab) IsSystemTransaction(tx *types.Transaction, header *types.Header) 
 		return false, nil
 	}
 	// Check out the sender
-	sender, err := types.Sender(p.signer, tx)
+	sender, err := types.Sender(d.signer, tx)
 	if err != nil {
 		return false, errors.New("unauthorized transaction")
 	}
@@ -267,57 +278,15 @@ func (p *Drab) IsSystemTransaction(tx *types.Transaction, header *types.Header) 
 	if sender != header.Coinbase {
 		return false, nil
 	}
-
-	// Will only handle validatorset transactions.
-	if p.isValidatorDepositTxSignature(tx) {
-		return true, nil
-	}
-	if p.isValidatorSlashTxSignature(tx) {
-		return true, nil
+	// Ensures to system contracts
+	if !isToSystemContract(*tx.To()) {
+		return false, nil
 	}
 
 	return false, nil
 }
 
-func (p *Drab) isValidatorDepositTxSignature(tx *types.Transaction) bool {
-	// Ensures matching contract
-	if *tx.To() != _validatorsetContract {
-		return false
-	}
-	// Ensures data length
-	if len(tx.Data()) < 4 {
-		return false
-	}
-
-	method, ok := p.validatorSetABI.Methods[_validatorMethodDeposit]
-	if !ok {
-		log.Warn("validatorset abi not correct")
-		return false
-	}
-
-	return bytes.EqualFold(tx.Data()[:4], method.ID)
-}
-
-func (p *Drab) isValidatorSlashTxSignature(tx *types.Transaction) bool {
-	// Ensures matching contract
-	if *tx.To() != _validatorsetContract {
-		return false
-	}
-	// Ensures data length
-	if len(tx.Data()) < 4 {
-		return false
-	}
-
-	method, ok := p.validatorSetABI.Methods[_validatorMethodSlash]
-	if !ok {
-		log.Warn("validatorset abi not correct")
-		return false
-	}
-
-	return bytes.EqualFold(tx.Data()[:4], method.ID)
-}
-
-func (p *Drab) IsSystemContract(to *common.Address) bool {
+func (d *Drab) IsSystemContract(to *common.Address) bool {
 	if to == nil {
 		return false
 	}
@@ -325,25 +294,25 @@ func (p *Drab) IsSystemContract(to *common.Address) bool {
 }
 
 // Author implements consensus.Engine, returning the SystemAddress
-func (p *Drab) Author(header *types.Header) (common.Address, error) {
+func (d *Drab) Author(header *types.Header) (common.Address, error) {
 	return header.Coinbase, nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
-func (p *Drab) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	return p.verifyHeader(chain, header, nil)
+func (d *Drab) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
+	return d.verifyHeader(chain, header, nil)
 }
 
 // VerifyHeaders is similar to VerifyHeader, but verifies a batch of headers. The
 // method returns a quit channel to abort the operations and a results channel to
 // retrieve the async verifications (the order is that of the input slice).
-func (p *Drab) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
+func (d *Drab) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
 	abort := make(chan struct{})
 	results := make(chan error, len(headers))
 
 	gopool.Submit(func() {
 		for i, header := range headers {
-			err := p.verifyHeader(chain, header, headers[:i])
+			err := d.verifyHeader(chain, header, headers[:i])
 
 			select {
 			case <-abort:
@@ -359,17 +328,47 @@ func (p *Drab) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types
 // caller may optionally pass in a batch of parents (ascending order) to avoid
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
-func (p *Drab) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+func (d *Drab) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+	if header.Number == nil {
+		return errUnknownBlock
+	}
+	number := header.Number.Uint64()
+
+	// Don't waste time checking blocks from the future
+	if header.Time > uint64(time.Now().Unix()) {
+		return consensus.ErrFutureBlock
+	}
+
+	// Check that the extra-data contains the vanity, validators and signature.
+	if len(header.Extra) < ExtraVanity {
+		return errMissingVanity
+	}
+	if len(header.Extra) < ExtraVanity+extraSeal {
+		return errMissingSignature
+	}
+
+	// check extra data
+	isEpoch := number%d.config.EpochSize == 0
+
+	// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
+	signersBytes := len(header.Extra) - ExtraVanity - extraSeal
+	if !isEpoch && signersBytes != 0 {
+		return errExtraValidators
+	}
+
+	if isEpoch && signersBytes%validatorBytesLength != 0 {
+		return errInvalidSpanValidators
+	}
+
 	// Ensure that the mix digest is drab mix hash
-	if header.MixDigest != types.IBFTMixHash {
+	if header.MixDigest != types.DrapMixHash {
 		return types.ErrIBFTInvalidMixHash
 	}
+
 	// Ensure that the block doesn't contain any uncles which are meaningless in PoS
 	if header.UncleHash != types.EmptyUncleHash {
 		return errInvalidUncleHash
 	}
-
-	number := header.Number.Uint64()
 
 	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
 	if number > 0 {
@@ -378,8 +377,49 @@ func (p *Drab) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 		}
 	}
 
+	// If all checks passed, validate any special fields for hard forks
+	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
+		return err
+	}
+
+	// All basic checks passed, verify cascading fields
+	return d.verifyCascadingFields(chain, header, parents)
+}
+
+// verifyCascadingFields verifies all the header fields that are not standalone,
+// rather depend on a batch of previous headers. The caller may optionally pass
+// in a batch of parents (ascending order) to avoid looking those up from the
+// database. This is useful for concurrently verifying a batch of new headers.
+func (d *Drab) verifyCascadingFields(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+	// The genesis block is the always valid dead-end
+	number := header.Number.Uint64()
+	if number == 0 {
+		return nil
+	}
+
+	parent, err := d.getParent(chain, header, parents)
+	if err != nil {
+		return err
+	}
+
+	snap, err := d.snapshot(chain, number-1, header.ParentHash, parents)
+	if err != nil {
+		return err
+	}
+
+	// Verify timestamp
+	err = d.blockTimeVerifyForHawaiiFork(snap, header, parent)
+	if err != nil {
+		return err
+	}
+
+	// Verify that the gas limit remains within allowed bounds
+	if err := d.verifyGasLimit(parent, header); err != nil {
+		return err
+	}
+
 	// Verify that the gas limit is <= 2^63-1
-	capacity := uint64(0x7fffffffffffffff)
+	const capacity = uint64(0x7fffffffffffffff)
 	if header.GasLimit > capacity {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, capacity)
 	}
@@ -388,31 +428,16 @@ func (p *Drab) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
 
-	parent, err := p.getParent(chain, header, parents)
-	if err != nil {
-		return err
-	}
-
-	snap, err := p.snapshot(chain, number-1, header.ParentHash, parents)
-	if err != nil {
-		return err
-	}
-
-	// Verify timestamp
-	if err := p.blockTimeVerifyForHawaiiFork(snap, header, parent); err != nil {
-		return err
-	}
-
 	// Verify that the gas limit remains within allowed bounds
-	if err := p.verifyGasLimit(parent, header); err != nil {
+	if err := d.verifyGasLimit(parent, header); err != nil {
 		return err
 	}
 
 	// Verify the signer
-	return p.verifySigner(chain, header, parents)
+	return d.verifySeal(chain, header, parents)
 }
 
-func (p *Drab) verifyGasLimit(parent, header *types.Header) error {
+func (d *Drab) verifyGasLimit(parent, header *types.Header) error {
 	diff := int64(parent.GasLimit) - int64(header.GasLimit)
 	if diff < 0 {
 		diff *= -1
@@ -427,7 +452,7 @@ func (p *Drab) verifyGasLimit(parent, header *types.Header) error {
 }
 
 // getParent returns the parent of a given block.
-func (p *Drab) getParent(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) (*types.Header, error) {
+func (d *Drab) getParent(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) (*types.Header, error) {
 	var parent *types.Header
 	number := header.Number.Uint64()
 	if len(parents) > 0 {
@@ -442,18 +467,25 @@ func (p *Drab) getParent(chain consensus.ChainHeaderReader, header *types.Header
 	return parent, nil
 }
 
-func (p *Drab) verifySigner(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+func (d *Drab) verifySeal(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+	// Verifying the genesis block is not supported
+	number := header.Number.Uint64()
+	if number == 0 {
+		return errUnknownBlock
+	}
+
 	// Recover validator first
-	validator, err := ecrecover(header, p.signatures, p.chainConfig.ChainID)
+	validator, err := ecrecover(header, d.signatures, d.chainConfig.ChainID)
 	if err != nil {
-		return errInvalidCommittedSeal
+		return err
 	}
 	// Ensure that coinbase is validator
 	if header.Coinbase != validator {
 		return errInvalidCoinbase
 	}
-	// check validator in list
-	snap, err := p.snapshot(chain, header.Number.Uint64()-1, header.ParentHash, parents)
+
+	// Check validator in list
+	snap, err := d.snapshot(chain, header.Number.Uint64()-1, header.ParentHash, parents)
 	if err != nil {
 		return err
 	}
@@ -461,11 +493,30 @@ func (p *Drab) verifySigner(chain consensus.ChainHeaderReader, header *types.Hea
 		return errValidatorNotAuthorized
 	}
 
+	// Ensure that validator not sign recently
+	for seen, recent := range snap.Recents {
+		if recent == validator {
+			// Validator is among recents, only fail if the current block doesn't shift it out
+			if limit := uint64(snap.blockLimit()); seen > number-limit {
+				return errRecentlySigned
+			}
+		}
+	}
+
+	// Ensure that the difficulty corresponds to the turn-ness of the validator
+	inturn := snap.inturn(validator)
+	if inturn && header.Difficulty.Cmp(diffInTurn) != 0 {
+		return errWrongDifficulty
+	}
+	if !inturn && header.Difficulty.Cmp(diffNoTurn) != 0 {
+		return errWrongDifficulty
+	}
+
 	return nil
 }
 
 // snapshot retrieves the authorization snapshot at a given point in time.
-func (p *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
+func (d *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
 	// Search for a snapshot in memory or on disk for checkpoints
 	var (
 		headers []*types.Header
@@ -474,14 +525,14 @@ func (p *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 
 	for snap == nil {
 		// If an in-memory snapshot was found, use that
-		if s, ok := p.recentSnaps.Get(hash); ok {
+		if s, ok := d.recentSnaps.Get(hash); ok {
 			snap = s.(*Snapshot)
 			break
 		}
 
 		// If an on-disk checkpoint snapshot can be found, use that
 		if number%checkpointInterval == 0 {
-			if s, err := loadSnapshot(p.config, p.signatures, p.db, hash, p.ethAPI); err == nil {
+			if s, err := loadSnapshot(d.config, d.signatures, d.db, hash, d.ethAPI); err == nil {
 				log.Trace("Loaded snapshot from disk", "number", number, "hash", hash)
 				snap = s
 				break
@@ -495,21 +546,23 @@ func (p *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 				// get checkpoint data
 				hash := checkpoint.Hash()
 
-				if len(checkpoint.Extra) <= ExtraVanity {
+				if len(checkpoint.Extra) <= ExtraVanity+extraSeal {
 					return nil, errors.New("invalid extra-data for genesis block, check the genesis.json file")
 				}
 
+				validatorBytes := checkpoint.Extra[ExtraVanity : len(checkpoint.Extra)-extraSeal]
 				// get validators from headers
-				extra, err := types.GetIbftExtra(checkpoint.Extra)
+				validators, err := parseValidators(validatorBytes)
 				if err != nil {
 					return nil, err
 				}
 
-				// new snap shot
-				snap = newSnapshot(p.config, p.signatures, number, hash, extra.Validators, p.ethAPI)
-				if err := snap.store(p.db); err != nil {
+				// new snapshot
+				snap = newSnapshot(d.config, d.signatures, number, hash, validators, d.ethAPI)
+				if err := snap.store(d.db); err != nil {
 					return nil, err
 				}
+
 				log.Info("Stored checkpoint snapshot to disk", "number", number, "hash", hash)
 				break
 			}
@@ -545,15 +598,15 @@ func (p *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 		headers[i], headers[len(headers)-1-i] = headers[len(headers)-1-i], headers[i]
 	}
 
-	snap, err := snap.apply(headers, chain, parents, p.chainConfig.ChainID)
+	snap, err := snap.apply(headers, chain, parents, d.chainConfig.ChainID)
 	if err != nil {
 		return nil, err
 	}
-	p.recentSnaps.Add(snap.Hash, snap)
+	d.recentSnaps.Add(snap.Hash, snap)
 
 	// If we've generated a new checkpoint snapshot, save to disk
 	if snap.Number%checkpointInterval == 0 && len(headers) > 0 {
-		if err = snap.store(p.db); err != nil {
+		if err = snap.store(d.db); err != nil {
 			return nil, err
 		}
 		log.Trace("Stored snapshot to disk", "number", snap.Number, "hash", snap.Hash)
@@ -563,7 +616,7 @@ func (p *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 
 // VerifyUncles implements consensus.Engine, always returning an error for any
 // uncles as this consensus mechanism doesn't permit uncles.
-func (p *Drab) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+func (d *Drab) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
 	if len(block.Uncles()) > 0 {
 		return errors.New("uncles not allowed")
 	}
@@ -572,30 +625,30 @@ func (p *Drab) VerifyUncles(chain consensus.ChainReader, block *types.Block) err
 
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
-func (p *Drab) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	header.Coinbase = p.val
+func (d *Drab) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
+	header.Coinbase = d.val
 	header.Nonce = types.BlockNonce{}
-	header.MixDigest = types.IBFTMixHash
+	header.MixDigest = types.DrapMixHash
 	header.UncleHash = types.EmptyRootHash // empty uncle
 
 	number := header.Number.Uint64()
-	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+	snap, err := d.snapshot(chain, number-1, header.ParentHash, nil)
 	if err != nil {
 		return err
 	}
 
 	// Set the correct difficulty
-	header.Difficulty = calcDifficulty(snap, p.val)
+	header.Difficulty = calcDifficulty(snap, d.val)
 
 	// Ensure the extra data has all it's components
 	if len(header.Extra) < ExtraVanity-nextForkHashSize {
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, ExtraVanity-nextForkHashSize-len(header.Extra))...)
 	}
 	header.Extra = header.Extra[:ExtraVanity-nextForkHashSize]
-	nextForkHash := forkid.NextForkHash(p.chainConfig, p.genesisHash, number)
+	nextForkHash := forkid.NextForkHash(d.chainConfig, d.genesisHash, number)
 	header.Extra = append(header.Extra, nextForkHash[:]...)
-	if number%p.config.EpochSize == 0 {
-		newValidators, err := p.getCurrentValidators(header.ParentHash, new(big.Int).Sub(header.Number, common.Big1))
+	if number%d.config.EpochSize == 0 {
+		newValidators, err := d.getCurrentValidators(header.ParentHash, new(big.Int).Sub(header.Number, common.Big1))
 		if err != nil {
 			return err
 		}
@@ -612,7 +665,7 @@ func (p *Drab) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Time = p.blockTimeForHawaiiFork(snap, header, parent)
+	header.Time = d.blockTimeForHawaiiFork(snap, header, parent)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
@@ -621,23 +674,23 @@ func (p *Drab) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given, bridge logs are handled.
-func (p *Drab) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
+func (d *Drab) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
 	uncles []*types.Header, receipts *[]*types.Receipt, systemTxs *[]*types.Transaction, usedGas *uint64) error {
 	// warn if not in majority fork
 	number := header.Number.Uint64()
-	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+	snap, err := d.snapshot(chain, number-1, header.ParentHash, nil)
 	if err != nil {
 		return err
 	}
-	nextForkHash := forkid.NextForkHash(p.chainConfig, p.genesisHash, number)
+	nextForkHash := forkid.NextForkHash(d.chainConfig, d.genesisHash, number)
 	if !snap.isMajorityFork(hex.EncodeToString(nextForkHash[:])) {
 		log.Debug("there is a possible fork, and your client is not the majority. Please check...", "nextForkHash", hex.EncodeToString(nextForkHash[:]))
 	}
 
-	// If the block is a epoch end block, verify the validator list
+	// If the block is an epoch end block, verify the validator list
 	// The verification can only be done when the state is ready, it can't be done in VerifyHeader.
-	if header.Number.Uint64()%p.config.EpochSize == 0 {
-		newValidators, err := p.getCurrentValidators(header.ParentHash, new(big.Int).Sub(header.Number, common.Big1))
+	if header.Number.Uint64()%d.config.EpochSize == 0 {
+		newValidators, err := d.getCurrentValidators(header.ParentHash, new(big.Int).Sub(header.Number, common.Big1))
 		if err != nil {
 			return err
 		}
@@ -653,7 +706,7 @@ func (p *Drab) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 	}
 
 	// Apply system transactions at last.
-	ctx := chainContext{Chain: chain, engine: p}
+	ctx := chainContext{Chain: chain, engine: d}
 	if header.Difficulty.Cmp(diffInTurn) != 0 {
 		// Some one need to be slashed
 		spoiledVal := snap.supposeValidator()
@@ -666,42 +719,36 @@ func (p *Drab) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 		}
 		if !signedRecently {
 			log.Trace("slash validator", "block hash", header.Hash(), "address", spoiledVal)
-			err = p.slash([]common.Address{spoiledVal}, state, header, ctx, txs, receipts, systemTxs, usedGas, false)
+			err = d.slash([]common.Address{spoiledVal}, state, header, ctx, txs, receipts, systemTxs, usedGas, false)
 			if err != nil {
-				// it is possible that slash validator failed because of the slash channel is disabled.
+				// impossible failure
 				log.Error("slash validator failed", "block hash", header.Hash(), "address", spoiledVal)
+				return err
 			}
 		}
 	}
 
+	// Distribute incomes
 	val := header.Coinbase
-	if err := p.distributeToValidator(val, state, header, ctx, txs, receipts, systemTxs, usedGas, false); err != nil {
+	if err := d.distributeToValidator(val, state, header, ctx, txs, receipts, systemTxs, usedGas, false); err != nil {
 		return err
 	}
 
+	// not consider it a system transaction
 	if len(*systemTxs) > 0 {
 		return errors.New("the length of systemTxs do not match")
 	}
-	// if systemTxs != nil && len(*systemTxs) > 0 {
-	// 	for _, tx := range *systemTxs {
-	// 		// Sender should be verified, so we simply set coinbase here
-	// 		msg := p.tx2SystemMessage(tx, header.Coinbase)
-	// 		if err := p.applyTransaction(msg, state, header, ctx, txs, receipts, systemTxs, usedGas, false); err != nil {
-	// 			return err
-	// 		}
-	// 	}
-	// }
 
 	// Handle bridge events
-	return p.handleBridgeEvents(state, *receipts)
+	return d.handleBridgeEvents(state, *receipts)
 }
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, bridge logs are handled, and returns the final block.
-func (p *Drab) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB,
+func (d *Drab) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB,
 	txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, []*types.Receipt, error) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
-	cx := chainContext{Chain: chain, engine: p}
+	cx := chainContext{Chain: chain, engine: d}
 	if txs == nil {
 		txs = make([]*types.Transaction, 0)
 	}
@@ -713,7 +760,7 @@ func (p *Drab) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 	if header.Difficulty.Cmp(diffInTurn) != 0 {
 		number := header.Number.Uint64()
 
-		snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+		snap, err := d.snapshot(chain, number-1, header.ParentHash, nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -730,7 +777,7 @@ func (p *Drab) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 		}
 		if !signedRecently {
 			// Slash validator who didn't sign recently
-			err = p.slash([]common.Address{spoiledVal}, state, header, cx, &txs, &receipts, nil, &header.GasUsed, true)
+			err = d.slash([]common.Address{spoiledVal}, state, header, cx, &txs, &receipts, nil, &header.GasUsed, true)
 			if err != nil {
 				// Possible failure because of the slash channel is disabled.
 				// DC contract not implement this feature, so it is only in case.
@@ -740,12 +787,12 @@ func (p *Drab) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 	}
 
 	// system reward
-	if err := p.distributeToValidator(p.val, state, header, cx, &txs, &receipts, nil, &header.GasUsed, true); err != nil {
+	if err := d.distributeToValidator(d.val, state, header, cx, &txs, &receipts, nil, &header.GasUsed, true); err != nil {
 		return nil, nil, err
 	}
 
 	// bridge events
-	if err := p.handleBridgeEvents(state, receipts); err != nil {
+	if err := d.handleBridgeEvents(state, receipts); err != nil {
 		return nil, nil, err
 	}
 
@@ -776,28 +823,28 @@ func (p *Drab) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 
 // Authorize injects a private key into the consensus engine to mint new blocks
 // with.
-func (p *Drab) Authorize(val common.Address, signFn SignerFn, signTxFn SignerTxFn) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+func (d *Drab) Authorize(val common.Address, signFn SignerFn, signTxFn SignerTxFn) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
 
-	p.val = val
-	p.signFn = signFn
-	p.signTxFn = signTxFn
+	d.val = val
+	d.signFn = signFn
+	d.signTxFn = signTxFn
 }
 
 // Argument leftOver is the time reserved for block finalize(calculate root, distribute income...)
-func (p *Drab) Delay(chain consensus.ChainReader, header *types.Header, leftOver *time.Duration) *time.Duration {
+func (d *Drab) Delay(chain consensus.ChainReader, header *types.Header, leftOver *time.Duration) *time.Duration {
 	number := header.Number.Uint64()
-	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+	snap, err := d.snapshot(chain, number-1, header.ParentHash, nil)
 	if err != nil {
 		return nil
 	}
 
-	delay := p.delayForHawaiiFork(snap, header)
+	delay := d.delayForHawaiiFork(snap, header)
 
-	if *leftOver >= time.Duration(p.config.BlockTime)*time.Second {
+	if *leftOver >= time.Duration(d.config.BlockTime)*time.Second {
 		// ignore invalid leftOver
-		log.Error("Delay invalid argument", "leftOver", leftOver.String(), "BlockTime", p.config.BlockTime)
+		log.Error("Delay invalid argument", "leftOver", leftOver.String(), "BlockTime", d.config.BlockTime)
 	} else if *leftOver >= delay {
 		// no left time
 		delay = time.Duration(0)
@@ -808,7 +855,7 @@ func (p *Drab) Delay(chain consensus.ChainReader, header *types.Header, leftOver
 	}
 
 	// The blocking time should be no more than half of period
-	half := time.Duration(p.config.BlockTime) * time.Second / 2
+	half := time.Duration(d.config.BlockTime) * time.Second / 2
 	if delay > half {
 		delay = half
 	}
@@ -817,7 +864,7 @@ func (p *Drab) Delay(chain consensus.ChainReader, header *types.Header, leftOver
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
-func (p *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+func (d *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	header := block.Header()
 
 	// Sealing the genesis block is not supported
@@ -826,16 +873,16 @@ func (p *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 		return errUnknownBlock
 	}
 	// For 0-period chains, refuse to seal empty blocks (no reward but would spin sealing)
-	if p.config.BlockTime == 0 && len(block.Transactions()) == 0 {
+	if d.config.BlockTime == 0 && len(block.Transactions()) == 0 {
 		log.Info("Sealing paused, waiting for transactions")
 		return nil
 	}
 	// Don't hold the val fields for the entire sealing procedure
-	p.lock.RLock()
-	val, signFn := p.val, p.signFn
-	p.lock.RUnlock()
+	d.lock.RLock()
+	val, signFn := d.val, d.signFn
+	d.lock.RUnlock()
 
-	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+	snap, err := d.snapshot(chain, number-1, header.ParentHash, nil)
 	if err != nil {
 		return err
 	}
@@ -857,12 +904,12 @@ func (p *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	}
 
 	// Sweet, the protocol permits us to sign the block, wait for our time
-	delay := p.delayForHawaiiFork(snap, header)
+	delay := d.delayForHawaiiFork(snap, header)
 
 	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "val", val.Hex())
 
 	// Sign all the things!
-	sig, err := signFn(accounts.Account{Address: val}, accounts.MimetypeParlia, DcIBFTRLP(header, p.chainConfig.ChainID))
+	sig, err := signFn(accounts.Account{Address: val}, accounts.MimetypeParlia, DcIBFTRLP(header, d.chainConfig.ChainID))
 	if err != nil {
 		return err
 	}
@@ -876,7 +923,7 @@ func (p *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 			return
 		case <-time.After(delay):
 		}
-		if p.shouldWaitForCurrentBlockProcess(chain, header, snap) {
+		if d.shouldWaitForCurrentBlockProcess(chain, header, snap) {
 			log.Info("Waiting for received in turn block to process")
 			select {
 			case <-stop:
@@ -890,14 +937,14 @@ func (p *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 		select {
 		case results <- block.WithSeal(header):
 		default:
-			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header, p.chainConfig.ChainID))
+			log.Warn("Sealing result is not read by miner", "sealhash", SealHash(header, d.chainConfig.ChainID))
 		}
 	}()
 
 	return nil
 }
 
-func (p *Drab) shouldWaitForCurrentBlockProcess(chain consensus.ChainHeaderReader, header *types.Header, snap *Snapshot) bool {
+func (d *Drab) shouldWaitForCurrentBlockProcess(chain consensus.ChainHeaderReader, header *types.Header, snap *Snapshot) bool {
 	if header.Difficulty.Cmp(diffInTurn) == 0 {
 		return false
 	}
@@ -913,40 +960,36 @@ func (p *Drab) shouldWaitForCurrentBlockProcess(chain consensus.ChainHeaderReade
 	return false
 }
 
-func (p *Drab) EnoughDistance(chain consensus.ChainReader, header *types.Header) bool {
-	snap, err := p.snapshot(chain, header.Number.Uint64()-1, header.ParentHash, nil)
+func (d *Drab) EnoughDistance(chain consensus.ChainReader, header *types.Header) bool {
+	snap, err := d.snapshot(chain, header.Number.Uint64()-1, header.ParentHash, nil)
 	if err != nil {
 		return true
 	}
-	return snap.enoughDistance(p.val, header)
+	return snap.enoughDistance(d.val, header)
 }
 
-func (p *Drab) AllowLightProcess(chain consensus.ChainReader, currentHeader *types.Header) bool {
-	snap, err := p.snapshot(chain, currentHeader.Number.Uint64()-1, currentHeader.ParentHash, nil)
+func (d *Drab) AllowLightProcess(chain consensus.ChainReader, currentHeader *types.Header) bool {
+	snap, err := d.snapshot(chain, currentHeader.Number.Uint64()-1, currentHeader.ParentHash, nil)
 	if err != nil {
 		return true
 	}
 	// validator is not allowed to diff sync
-	return !snap.includeValidator(p.val)
+	return !snap.includeValidator(d.val)
 }
 
-func (p *Drab) IsLocalBlock(header *types.Header) bool {
-	return p.val == header.Coinbase
+func (d *Drab) IsLocalBlock(header *types.Header) bool {
+	return d.val == header.Coinbase
 }
 
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
-func (p *Drab) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	// hawaii fork uses another difficulty adjustment algorithm
-	if p.chainConfig.IsHawaii(new(big.Int).Add(parent.Number, common.Big1)) {
-		snap, err := p.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
-		if err != nil {
-			return nil
-		}
-		return calcDifficulty(snap, p.val)
+func (d *Drab) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
+	snap, err := d.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
+	if err != nil {
+		return nil
 	}
-	return difficultyByParentNumber(parent.Number)
+	return calcDifficulty(snap, d.val)
 }
 
 // calcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
@@ -959,40 +1002,35 @@ func calcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
 	return new(big.Int).Set(diffNoTurn)
 }
 
-// old version ibft returns block number directly
-func difficultyByParentNumber(num *big.Int) *big.Int {
-	return new(big.Int).Add(num, big.NewInt(1))
-}
-
 // SealHash returns the hash of a block prior to it being sealed.
-func (p *Drab) SealHash(header *types.Header) common.Hash {
-	if p.chainConfig.IsHawaii(header.Number) {
-		return SealHash(header, p.chainConfig.ChainID)
+func (d *Drab) SealHash(header *types.Header) common.Hash {
+	if d.chainConfig.IsHawaii(header.Number) {
+		return SealHash(header, d.chainConfig.ChainID)
 	}
 
 	extra, _ := types.GetIbftExtra(header.Extra)
-	return SealDcIBFTHash(header, p.chainConfig.ChainID, extra)
+	return SealDcIBFTHash(header, d.chainConfig.ChainID, extra)
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC API to query snapshot.
-func (p *Drab) APIs(chain consensus.ChainHeaderReader) []rpc.API {
+func (d *Drab) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	return []rpc.API{{
 		Namespace: "drab",
 		Version:   "1.0",
-		Service:   &API{chain: chain, drab: p},
+		Service:   &API{chain: chain, drab: d},
 		Public:    false,
 	}}
 }
 
 // Close implements consensus.Engine. It's a noop for ibft as there are no background threads.
-func (p *Drab) Close() error {
+func (d *Drab) Close() error {
 	return nil
 }
 
 // ==========================  interaction with contract/account =========
 
 // getCurrentValidators get current validators
-func (p *Drab) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int) ([]common.Address, error) {
+func (d *Drab) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int) ([]common.Address, error) {
 	// block
 	blockNr := rpc.BlockNumberOrHashWithHash(blockHash, false)
 
@@ -1002,7 +1040,7 @@ func (p *Drab) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // cancel when we are finished consuming integers
 
-	data, err := p.validatorSetABI.Pack(method)
+	data, err := d.validatorSetABI.Pack(method)
 	if err != nil {
 		log.Error("Unable to pack tx for getValidators", "error", err)
 		return nil, err
@@ -1011,7 +1049,7 @@ func (p *Drab) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int)
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(dccontracts.DCValidatorSetContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-	result, err := p.ethAPI.Call(ctx, ethapi.TransactionArgs{
+	result, err := d.ethAPI.Call(ctx, ethapi.TransactionArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
@@ -1025,7 +1063,7 @@ func (p *Drab) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int)
 	)
 	out := ret0
 
-	if err := p.validatorSetABI.UnpackIntoInterface(out, method, result); err != nil {
+	if err := d.validatorSetABI.UnpackIntoInterface(out, method, result); err != nil {
 		return nil, err
 	}
 
@@ -1036,13 +1074,13 @@ func (p *Drab) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int)
 }
 
 // slash spoiled validators
-func (p *Drab) slash(spoiledValidators []common.Address, state *state.StateDB, header *types.Header, chain core.ChainContext,
+func (d *Drab) slash(spoiledValidators []common.Address, state *state.StateDB, header *types.Header, chain core.ChainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// method
 	method := "slash"
 
 	// get packed data
-	data, err := p.validatorSetABI.Pack(method,
+	data, err := d.validatorSetABI.Pack(method,
 		spoiledValidators,
 	)
 	if err != nil {
@@ -1050,20 +1088,20 @@ func (p *Drab) slash(spoiledValidators []common.Address, state *state.StateDB, h
 		return err
 	}
 	// get system message
-	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0)
+	msg := d.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0)
 	// apply message
-	return p.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
+	return d.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
 
 // slash spoiled validators
-func (p *Drab) distributeToValidator(validator common.Address,
+func (d *Drab) distributeToValidator(validator common.Address,
 	state *state.StateDB, header *types.Header, chain core.ChainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// method
 	method := "deposit"
 
 	// get packed data
-	data, err := p.validatorSetABI.Pack(method,
+	data, err := d.validatorSetABI.Pack(method,
 		validator,
 	)
 	if err != nil {
@@ -1071,13 +1109,13 @@ func (p *Drab) distributeToValidator(validator common.Address,
 		return err
 	}
 	// get system message
-	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0)
+	msg := d.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0)
 	// apply message
-	return p.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
+	return d.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
 
 // get system message
-func (p *Drab) getSystemMessage(from, toAddress common.Address, data []byte, value *big.Int) callmsg {
+func (d *Drab) getSystemMessage(from, toAddress common.Address, data []byte, value *big.Int) callmsg {
 	return callmsg{
 		ethereum.CallMsg{
 			From:     from,
@@ -1090,7 +1128,7 @@ func (p *Drab) getSystemMessage(from, toAddress common.Address, data []byte, val
 	}
 }
 
-func (p *Drab) applyTransaction(
+func (d *Drab) applyTransaction(
 	msg callmsg,
 	state *state.StateDB,
 	header *types.Header,
@@ -1100,10 +1138,10 @@ func (p *Drab) applyTransaction(
 ) (err error) {
 	nonce := state.GetNonce(msg.From())
 	expectedTx := types.NewTransaction(nonce, *msg.To(), msg.Value(), msg.Gas(), msg.GasPrice(), msg.Data())
-	expectedHash := p.signer.Hash(expectedTx)
+	expectedHash := d.signer.Hash(expectedTx)
 
-	if msg.From() == p.val && mining {
-		expectedTx, err = p.signTxFn(accounts.Account{Address: msg.From()}, expectedTx, p.chainConfig.ChainID)
+	if msg.From() == d.val && mining {
+		expectedTx, err = d.signTxFn(accounts.Account{Address: msg.From()}, expectedTx, d.chainConfig.ChainID)
 		if err != nil {
 			return err
 		}
@@ -1112,7 +1150,7 @@ func (p *Drab) applyTransaction(
 			return errors.New("supposed to get a actual transaction, but get none")
 		}
 		actualTx := (*receivedTxs)[0]
-		if !bytes.Equal(p.signer.Hash(actualTx).Bytes(), expectedHash.Bytes()) {
+		if !bytes.Equal(d.signer.Hash(actualTx).Bytes(), expectedHash.Bytes()) {
 			return fmt.Errorf("expected tx hash %v, get %v, nonce %d, to %s, value %s, gas %d, gasPrice %s, data %s", expectedHash.String(), actualTx.Hash().String(),
 				expectedTx.Nonce(),
 				expectedTx.To().String(),
@@ -1127,16 +1165,16 @@ func (p *Drab) applyTransaction(
 		*receivedTxs = (*receivedTxs)[1:]
 	}
 	state.Prepare(expectedTx.Hash(), len(*txs))
-	gasUsed, err := applyMessage(msg, state, header, p.chainConfig, chainContext)
+	gasUsed, err := applyMessage(msg, state, header, d.chainConfig, chainContext)
 	if err != nil {
 		return err
 	}
 	*txs = append(*txs, expectedTx)
 	var root []byte
-	if p.chainConfig.IsByzantium(header.Number) {
+	if d.chainConfig.IsByzantium(header.Number) {
 		state.Finalise(true)
 	} else {
-		root = state.IntermediateRoot(p.chainConfig.IsEIP158(header.Number)).Bytes()
+		root = state.IntermediateRoot(d.chainConfig.IsEIP158(header.Number)).Bytes()
 	}
 	*usedGas += gasUsed
 	receipt := types.NewReceipt(root, false, *usedGas)
