@@ -249,6 +249,31 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 	return msg, nil
 }
 
+func (args *TransactionArgs) ToMessageWithNonce(globalGasCap uint64, baseFee *big.Int) (types.Message, error) {
+	msg, err := args.ToMessage(globalGasCap, baseFee)
+	if err != nil {
+		return types.Message{}, err
+	}
+
+	if args.Nonce == nil {
+		return msg, nil
+	}
+
+	return types.NewMessage(
+		msg.From(),
+		msg.To(),
+		uint64(*args.Nonce),
+		msg.Value(),
+		msg.Gas(),
+		msg.GasPrice(),
+		msg.GasFeeCap(),
+		msg.GasTipCap(),
+		msg.Data(),
+		msg.AccessList(),
+		msg.IsFake(),
+	), nil
+}
+
 // toTransaction converts the arguments to a transaction.
 // This assumes that setDefaults has been called.
 func (args *TransactionArgs) toTransaction() *types.Transaction {
