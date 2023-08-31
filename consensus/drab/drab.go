@@ -50,18 +50,16 @@ const (
 
 	// signature extra data
 
-	ExtraVanity      = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
+	extraVanity      = 32 // Fixed number of extra-data prefix bytes reserved for signer vanity
 	extraSeal        = 65 // Fixed number of extra-data suffix bytes reserved for signer seal
 	nextForkHashSize = 4  // Fixed number of extra-data suffix bytes reserved for nextForkHash.
 )
 
 var (
-	_validatorsetContract = common.HexToAddress(dccontracts.DCValidatorSetContract)
-
 	systemContracts = map[common.Address]bool{
-		_validatorsetContract:                             true,
-		common.HexToAddress(dccontracts.DCBridgeContract): true,
-		common.HexToAddress(dccontracts.DCVaultContract):  true,
+		common.HexToAddress(dccontracts.DCValidatorSetContract): true,
+		common.HexToAddress(dccontracts.DCBridgeContract):       true,
+		common.HexToAddress(dccontracts.DCVaultContract):        true,
 	}
 
 	diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
@@ -92,6 +90,9 @@ var (
 	// errInvalidSpanValidators is returned if a block contains an
 	// invalid list of validators (i.e. non divisible by 20 bytes).
 	errInvalidSpanValidators = errors.New("invalid validator list on sprint end block")
+
+	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
+	errInvalidMixDigest = errors.New("non-zero mix digest")
 
 	// errInvalidCoinbase is returned when coinbase not match with block sealer(validator).
 	errInvalidCoinbase = errors.New("invalid coinbase")
@@ -340,10 +341,10 @@ func (d *Drab) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 	}
 
 	// Check that the extra-data contains the vanity, validators and signature.
-	if len(header.Extra) < ExtraVanity {
+	if len(header.Extra) < extraVanity {
 		return errMissingVanity
 	}
-	if len(header.Extra) < ExtraVanity+extraSeal {
+	if len(header.Extra) < extraVanity+extraSeal {
 		return errMissingSignature
 	}
 
@@ -351,7 +352,7 @@ func (d *Drab) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 	isEpoch := number%d.config.EpochSize == 0
 
 	// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
-	signersBytes := len(header.Extra) - ExtraVanity - extraSeal
+	signersBytes := len(header.Extra) - extraVanity - extraSeal
 	if !isEpoch && signersBytes != 0 {
 		return errExtraValidators
 	}
@@ -362,7 +363,7 @@ func (d *Drab) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 
 	// Ensure that the mix digest is drab mix hash
 	if header.MixDigest != types.DrapMixHash {
-		return types.ErrIBFTInvalidMixHash
+		return errInvalidMixDigest
 	}
 
 	// Ensure that the block doesn't contain any uncles which are meaningless in PoS
@@ -546,11 +547,11 @@ func (d *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 				// get checkpoint data
 				hash := checkpoint.Hash()
 
-				if len(checkpoint.Extra) <= ExtraVanity+extraSeal {
+				if len(checkpoint.Extra) <= extraVanity+extraSeal {
 					return nil, errors.New("invalid extra-data for genesis block, check the genesis.json file")
 				}
 
-				validatorBytes := checkpoint.Extra[ExtraVanity : len(checkpoint.Extra)-extraSeal]
+				validatorBytes := checkpoint.Extra[extraVanity : len(checkpoint.Extra)-extraSeal]
 				// get validators from headers
 				validators, err := parseValidators(validatorBytes)
 				if err != nil {
@@ -641,12 +642,14 @@ func (d *Drab) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	header.Difficulty = calcDifficulty(snap, d.val)
 
 	// Ensure the extra data has all it's components
-	if len(header.Extra) < ExtraVanity-nextForkHashSize {
-		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, ExtraVanity-nextForkHashSize-len(header.Extra))...)
+	if len(header.Extra) < extraVanity-nextForkHashSize {
+		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-nextForkHashSize-len(header.Extra))...)
 	}
-	header.Extra = header.Extra[:ExtraVanity-nextForkHashSize]
+	header.Extra = header.Extra[:extraVanity-nextForkHashSize]
 	nextForkHash := forkid.NextForkHash(d.chainConfig, d.genesisHash, number)
 	header.Extra = append(header.Extra, nextForkHash[:]...)
+
+	// update validators on epoch block
 	if number%d.config.EpochSize == 0 {
 		newValidators, err := d.getCurrentValidators(header.ParentHash, new(big.Int).Sub(header.Number, common.Big1))
 		if err != nil {
@@ -657,6 +660,7 @@ func (d *Drab) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 			header.Extra = append(header.Extra, validator.Bytes()...)
 		}
 	}
+
 	// add extra seal space
 	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
@@ -665,10 +669,12 @@ func (d *Drab) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
+	// make sure timestamp matches current
 	header.Time = d.blockTimeForHawaiiFork(snap, header, parent)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
+
 	return nil
 }
 
@@ -700,7 +706,7 @@ func (d *Drab) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 		}
 
 		extraSuffix := len(header.Extra) - extraSeal
-		if !bytes.Equal(header.Extra[ExtraVanity:extraSuffix], validatorsBytes) {
+		if !bytes.Equal(header.Extra[extraVanity:extraSuffix], validatorsBytes) {
 			return errMismatchingEpochValidators
 		}
 	}
@@ -888,7 +894,7 @@ func (d *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	}
 
 	// Bail out if we're unauthorized to sign a block
-	if _, authorized := snap.validatorSet[val]; !authorized {
+	if !snap.includeValidator(val) {
 		return errUnauthorizedValidator
 	}
 
@@ -896,7 +902,7 @@ func (d *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	for seen, recent := range snap.Recents {
 		if recent == val {
 			// Signer is among recents, only wait if the current block doesn't shift it out
-			if limit := uint64(len(snap.Validators)/2 + 1); number < limit || seen > number-limit {
+			if limit := uint64(snap.blockLimit()); number < limit || seen > number-limit {
 				log.Info("Signed recently, must wait for others")
 				return nil
 			}
@@ -909,7 +915,7 @@ func (d *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	log.Info("Sealing block with", "number", number, "delay", delay, "headerDifficulty", header.Difficulty, "val", val.Hex())
 
 	// Sign all the things!
-	sig, err := signFn(accounts.Account{Address: val}, accounts.MimetypeParlia, DcIBFTRLP(header, d.chainConfig.ChainID))
+	sig, err := signFn(accounts.Account{Address: val}, accounts.MimetypeParlia, DrabRLP(header, d.chainConfig.ChainID))
 	if err != nil {
 		return err
 	}
@@ -1004,12 +1010,7 @@ func calcDifficulty(snap *Snapshot, signer common.Address) *big.Int {
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (d *Drab) SealHash(header *types.Header) common.Hash {
-	if d.chainConfig.IsHawaii(header.Number) {
-		return SealHash(header, d.chainConfig.ChainID)
-	}
-
-	extra, _ := types.GetIbftExtra(header.Extra)
-	return SealDcIBFTHash(header, d.chainConfig.ChainID, extra)
+	return SealHash(header, d.chainConfig.ChainID)
 }
 
 // APIs implements consensus.Engine, returning the user facing RPC API to query snapshot.
@@ -1022,7 +1023,7 @@ func (d *Drab) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 	}}
 }
 
-// Close implements consensus.Engine. It's a noop for ibft as there are no background threads.
+// Close implements consensus.Engine. It's a noop for drab as there are no background threads.
 func (d *Drab) Close() error {
 	return nil
 }
@@ -1193,14 +1194,6 @@ func (d *Drab) applyTransaction(
 }
 
 // ===========================     utility function        ==========================
-// SealDcIBFTHash returns the hash of a block prior to it being sealed.
-func SealDcIBFTHash(header *types.Header, chainId *big.Int, extra *types.IBFTExtra) (hash common.Hash) {
-	hasher := sha3.NewLegacyKeccak256()
-	types.IBFTHeaderExtraRLPHash(hasher, header, extra)
-	hasher.Sum(hash[:0])
-	return hash
-}
-
 // SealHash returns the hash of a block prior to it being sealed.
 func SealHash(header *types.Header, chainId *big.Int) (hash common.Hash) {
 	hasher := sha3.NewLegacyKeccak256()
@@ -1209,14 +1202,14 @@ func SealHash(header *types.Header, chainId *big.Int) (hash common.Hash) {
 	return hash
 }
 
-// DcIBFTRLP returns the rlp bytes which needs to be signed for the parlia
+// DrabRLP returns the rlp bytes which needs to be signed for the parlia
 // sealing. The RLP to sign consists of the entire header apart from the 65 byte signature
 // contained at the end of the extra data.
 //
 // Note, the method requires the extra data to be at least 65 bytes, otherwise it
 // panics. This is done to avoid accidentally using both forms (signature present
 // or not), which could be abused to produce different hashes for the same header.
-func DcIBFTRLP(header *types.Header, chainId *big.Int) []byte {
+func DrabRLP(header *types.Header, chainId *big.Int) []byte {
 	b := new(bytes.Buffer)
 	encodeSigHeader(b, header, chainId)
 	return b.Bytes()

@@ -217,7 +217,7 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainHeaderRea
 			}
 
 			// parse validators from extra
-			validatorBytes := checkpointHeader.Extra[ExtraVanity : len(checkpointHeader.Extra)-extraSeal]
+			validatorBytes := checkpointHeader.Extra[extraVanity : len(checkpointHeader.Extra)-extraSeal]
 			// get validators from headers and use that for new validator set
 			newValArr, err := parseValidators(validatorBytes)
 			if err != nil {
@@ -251,7 +251,7 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainHeaderRea
 			snap.validatorSet = newValSet
 		}
 		// cache block fork hash
-		snap.RecentForkHashes[number] = hex.EncodeToString(header.Extra[ExtraVanity-nextForkHashSize : ExtraVanity])
+		snap.RecentForkHashes[number] = hex.EncodeToString(header.Extra[extraVanity-nextForkHashSize : extraVanity])
 	}
 	snap.Number += uint64(len(headers))
 	snap.Hash = headers[len(headers)-1].Hash()
