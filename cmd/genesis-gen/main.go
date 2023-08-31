@@ -170,8 +170,11 @@ func genesisGen(c *cli.Context) error {
 		PreportlandBlock:    big.NewInt(1), // dogechain system contract upgrade
 		PortlandBlock:       big.NewInt(2),
 		DetroitBlock:        big.NewInt(3),
-		// TODO: Add hawaii hard fork
-		// HawaiiBlock:      big.NewInt(4),
+		// enable together in hawaii fork
+		BerlinBlock: big.NewInt(4),
+		LondonBlock: big.NewInt(4),
+		NanoBlock:   big.NewInt(4), // blacklist
+		HawaiiBlock: big.NewInt(4),
 		Drab: &params.DrabConfig{
 			EpochSize: c.GlobalUint64(epochSizeFlag.Name),
 		},
