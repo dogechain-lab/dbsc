@@ -354,10 +354,13 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 	}
 
 	// consensus engine with different mining actions
-	if st.evm.ChainConfig().Parlia != nil { // parlia
+	if st.evm.ChainConfig().Drab != nil { // drab
+		// Directly send fee to the coinbase.
+		st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+	} else if st.evm.ChainConfig().Parlia != nil { // parlia
 		// The fee should go to system address for later distribution.
 		st.state.AddBalance(consensus.SystemAddress, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
-	} else { // drab, clique or others
+	} else { // clique or others
 		effectiveTip := st.gasPrice
 		if rules.IsLondon {
 			effectiveTip = cmath.BigMin(st.gasTipCap, new(big.Int).Sub(st.gasFeeCap, st.evm.Context.BaseFee))
