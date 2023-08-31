@@ -154,14 +154,14 @@ var PrecompiledContractsBLS = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{18}): &bls12381MapG2{},
 }
 
-// PrecompiledContractsIBFT contains the default set of pre-compiled Ethereum
-// contracts used in the IBFT release.
-var PrecompiledContractsIBFT = map[common.Address]PrecompiledContract{
+// PrecompiledContractsHawaii contains the default set of pre-compiled Ethereum
+// contracts used in the Hawaii release.
+var PrecompiledContractsHawaii = map[common.Address]PrecompiledContract{
 	common.BytesToAddress([]byte{1}): &ecrecover{},
 	common.BytesToAddress([]byte{2}): &sha256hash{},
 	common.BytesToAddress([]byte{3}): &ripemd160hash{},
 	common.BytesToAddress([]byte{4}): &dataCopy{},
-	common.BytesToAddress([]byte{5}): &bigModExp{},
+	common.BytesToAddress([]byte{5}): &bigModExp{eip2565: true},
 	common.BytesToAddress([]byte{6}): &bn256AddIstanbul{},
 	common.BytesToAddress([]byte{7}): &bn256ScalarMulIstanbul{},
 	common.BytesToAddress([]byte{8}): &bn256PairingIstanbul{},
@@ -169,6 +169,7 @@ var PrecompiledContractsIBFT = map[common.Address]PrecompiledContract{
 }
 
 var (
+	PrecompiledAddressesHawaii    []common.Address
 	PrecompiledAddressesPlanck    []common.Address
 	PrecompiledAddressesMoran     []common.Address
 	PrecompiledAddressesNano      []common.Address
@@ -176,7 +177,6 @@ var (
 	PrecompiledAddressesIstanbul  []common.Address
 	PrecompiledAddressesByzantium []common.Address
 	PrecompiledAddressesHomestead []common.Address
-	PrecompiledAddressesIBFT      []common.Address
 )
 
 func init() {
@@ -201,14 +201,16 @@ func init() {
 	for k := range PrecompiledContractsPlanck {
 		PrecompiledAddressesPlanck = append(PrecompiledAddressesPlanck, k)
 	}
-	for k := range PrecompiledContractsIBFT {
-		PrecompiledAddressesIBFT = append(PrecompiledAddressesIBFT, k)
+	for k := range PrecompiledContractsHawaii {
+		PrecompiledAddressesHawaii = append(PrecompiledAddressesHawaii, k)
 	}
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
 func ActivePrecompiles(rules params.Rules) []common.Address {
 	switch {
+	case rules.IsHawaii:
+		return PrecompiledAddressesHawaii
 	case rules.IsPlanck:
 		return PrecompiledAddressesPlanck
 	case rules.IsMoran:
