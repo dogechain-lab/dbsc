@@ -404,7 +404,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 	// Handle upgrade build-in system contract code
-	if p.config.IsIBFT(block.Number()) { // dbsc
+	if p.config.IsHawaii(block.Number()) { // dbsc
 		dccontracts.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)
 	} else { // parlia by default
 		systemcontracts.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)

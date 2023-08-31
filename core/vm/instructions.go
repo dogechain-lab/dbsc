@@ -660,19 +660,7 @@ func opCreate2(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]
 
 	// Push item on the stack based on the returned error.
 	if suberr != nil {
-		if interpreter.evm.chainConfig.IsIBFT(interpreter.evm.Context.BlockNumber) {
-			// IBFT use a strange Create2 opcode stack calling sequence, which is not
-			// EVM compatible. So we need to return address even though it failed due
-			// to not enough gas during running the construction.
-			// But we'll make this unknown issue back to normal after the hard fork
-			if interpreter.evm.chainConfig.IsHawaii(interpreter.evm.Context.BlockNumber) {
-				stackvalue.Clear()
-			} else {
-				stackvalue.SetBytes(addr.Bytes())
-			}
-		} else {
-			stackvalue.Clear()
-		}
+		stackvalue.Clear()
 	} else {
 		stackvalue.SetBytes(addr.Bytes())
 	}

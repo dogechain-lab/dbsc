@@ -81,8 +81,6 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 			// Hawaii instructions are compatible with istanbul.
 			// No more issues should be brought in here.
 			cfg.JumpTable = &hawaiiInstructionSet
-		case evm.chainRules.IsIBFT:
-			cfg.JumpTable = &ibftInstructionSet
 		case evm.chainRules.IsMerge:
 			cfg.JumpTable = &mergeInstructionSet
 		case evm.chainRules.IsLondon:

@@ -55,8 +55,7 @@ var (
 	berlinInstructionSet           = newBerlinInstructionSet()
 	londonInstructionSet           = newLondonInstructionSet()
 	mergeInstructionSet            = newMergeInstructionSet()
-	ibftInstructionSet             = newIBFTInstructionSet()
-	hawaiiInstructionSet           = newIstanbulInstructionSet()
+	hawaiiInstructionSet           = newMergeInstructionSet()
 )
 
 // JumpTable contains the EVM opcodes supported at a given fork.
@@ -116,16 +115,6 @@ func newIstanbulInstructionSet() JumpTable {
 	enable1344(&instructionSet) // ChainID opcode - https://eips.ethereum.org/EIPS/eip-1344
 	enable1884(&instructionSet) // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
 	enable2200(&instructionSet) // Net metered SSTORE - https://eips.ethereum.org/EIPS/eip-2200
-
-	return validate(instructionSet)
-}
-
-func newIBFTInstructionSet() JumpTable {
-	instructionSet := newConstantinopleInstructionSet()
-
-	enable1344(&instructionSet)     // ChainID opcode - https://eips.ethereum.org/EIPS/eip-1344
-	enable1884(&instructionSet)     // Reprice reader opcodes - https://eips.ethereum.org/EIPS/eip-1884
-	enableIBFT2200(&instructionSet) // Net metered SSTORE
 
 	return validate(instructionSet)
 }
