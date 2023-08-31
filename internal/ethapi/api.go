@@ -911,7 +911,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		if args.Gas == nil {
 			gaslimit := hexutil.Uint64(header.GasLimit)
 			args.Gas = &gaslimit
-			msg, err := args.ToMessage(globalGasCap, header.BaseFee)
+			msg, err := args.ToMessageWithNonce(globalGasCap, header.BaseFee)
 			if err != nil {
 				return nil, err
 			}
@@ -933,7 +933,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 			args.Gas = &useGas
 		}
 
-		msg, err := args.ToMessage(globalGasCap, header.BaseFee)
+		msg, err := args.ToMessageWithNonce(globalGasCap, header.BaseFee)
 		if err != nil {
 			return nil, err
 		}
@@ -1123,6 +1123,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
+
+		fromNomce, _ := b.GetPoolNonce(ctx, *args.From)
+		args.Nonce = (*hexutil.Uint64)(&fromNomce)
 
 		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
 		if err != nil {
