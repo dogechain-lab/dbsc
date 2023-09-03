@@ -231,6 +231,10 @@ func genesisGen(c *cli.Context) error {
 			return fmt.Errorf("failed to parse amount %s: %w", val, err)
 		}
 
+		if amount == nil {
+			amount = big.NewInt(0)
+		}
+
 		genesis.Alloc[addr] = core.GenesisAccount{
 			Balance: amount,
 		}
