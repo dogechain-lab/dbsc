@@ -59,6 +59,7 @@ require (
 	github.com/tendermint/iavl v0.12.0
 	github.com/tendermint/tendermint v0.31.12
 	github.com/tyler-smith/go-bip39 v1.0.1-0.20181017060643-dbb3b84ba2ef
+	go.uber.org/automaxprocs v1.5.2
 	golang.org/x/crypto v0.5.0
 	golang.org/x/sync v0.1.0
 	golang.org/x/sys v0.5.0
