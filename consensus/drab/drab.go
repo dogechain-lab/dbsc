@@ -540,6 +540,30 @@ func (d *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 			}
 		}
 
+		// If we're on hawaii hardfork block, we need to use dc snapshot and store it
+		if d.chainConfig.IsOnHawaii(big.NewInt(int64(number + 1))) {
+			// get checkpoint data
+			checkpoint := chain.GetHeaderByNumber(number)
+			if checkpoint == nil {
+				return nil, errUnknownBlock
+			}
+
+			// get the extra part that contains the seal
+			extra, err := types.GetIbftExtra(checkpoint.Extra)
+			if err != nil {
+				return nil, err
+			}
+
+			// new snapshot
+			snap = newSnapshot(d.config, d.signatures, number, hash, extra.Validators, d.ethAPI)
+			if err := snap.store(d.db); err != nil {
+				return nil, err
+			}
+
+			log.Info("Stored checkpoint snapshot to disk", "number", number, "hash", hash)
+			break
+		}
+
 		// If we're at the genesis, snapshot the initial state.
 		if number == 0 {
 			checkpoint := chain.GetHeaderByNumber(number)
