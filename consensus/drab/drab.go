@@ -725,7 +725,7 @@ func (d *Drab) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 		}
 		if !signedRecently {
 			log.Trace("slash validator", "block hash", header.Hash(), "address", spoiledVal)
-			err = d.slash([]common.Address{spoiledVal}, state, header, ctx, txs, receipts, systemTxs, usedGas, false)
+			err = d.slash(spoiledVal, state, header, ctx, txs, receipts, systemTxs, usedGas, false)
 			if err != nil {
 				// impossible failure
 				log.Error("slash validator failed", "block hash", header.Hash(), "address", spoiledVal)
@@ -783,7 +783,7 @@ func (d *Drab) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 		}
 		if !signedRecently {
 			// Slash validator who didn't sign recently
-			err = d.slash([]common.Address{spoiledVal}, state, header, cx, &txs, &receipts, nil, &header.GasUsed, true)
+			err = d.slash(spoiledVal, state, header, cx, &txs, &receipts, nil, &header.GasUsed, true)
 			if err != nil {
 				// Possible failure because of the slash channel is disabled.
 				// DC contract not implement this feature, so it is only in case.
@@ -1075,14 +1075,14 @@ func (d *Drab) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int)
 }
 
 // slash spoiled validators
-func (d *Drab) slash(spoiledValidators []common.Address, state *state.StateDB, header *types.Header, chain core.ChainContext,
+func (d *Drab) slash(spoiledValidator common.Address, state *state.StateDB, header *types.Header, chain core.ChainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// method
 	method := "slash"
 
 	// get packed data
 	data, err := d.validatorSetABI.Pack(method,
-		spoiledValidators,
+		spoiledValidator,
 	)
 	if err != nil {
 		log.Error("Unable to pack tx for slash", "error", err)
@@ -1102,9 +1102,7 @@ func (d *Drab) distributeToValidator(validator common.Address,
 	method := "deposit"
 
 	// get packed data
-	data, err := d.validatorSetABI.Pack(method,
-		validator,
-	)
+	data, err := d.validatorSetABI.Pack(method)
 	if err != nil {
 		log.Error("Unable to pack tx for deposit", "error", err)
 		return err
