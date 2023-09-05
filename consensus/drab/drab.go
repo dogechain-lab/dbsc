@@ -414,11 +414,6 @@ func (d *Drab) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 		return err
 	}
 
-	// Verify that the gas limit remains within allowed bounds
-	if err := d.verifyGasLimit(parent, header); err != nil {
-		return err
-	}
-
 	// Verify that the gas limit is <= 2^63-1
 	const capacity = uint64(0x7fffffffffffffff)
 	if header.GasLimit > capacity {
@@ -430,26 +425,12 @@ func (d *Drab) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 	}
 
 	// Verify that the gas limit remains within allowed bounds
-	if err := d.verifyGasLimit(parent, header); err != nil {
+	if err := VerifyEip1559Header(d.chainConfig, parent, header); err != nil {
 		return err
 	}
 
 	// Verify the signer
 	return d.verifySeal(chain, header, parents)
-}
-
-func (d *Drab) verifyGasLimit(parent, header *types.Header) error {
-	diff := int64(parent.GasLimit) - int64(header.GasLimit)
-	if diff < 0 {
-		diff *= -1
-	}
-	limit := parent.GasLimit / params.GasLimitBoundDivisor
-
-	if uint64(diff) >= limit || header.GasLimit < params.MinGasLimit {
-		return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
-	}
-
-	return nil
 }
 
 // getParent returns the parent of a given block.
@@ -1113,7 +1094,7 @@ func (d *Drab) slash(spoiledValidator common.Address, state *state.StateDB, head
 		return err
 	}
 	// get system message
-	msg := d.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0)
+	msg := d.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0, math.MaxUint64/2)
 	// apply message
 	return d.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
@@ -1132,21 +1113,22 @@ func (d *Drab) distributeToValidator(validator common.Address,
 		return err
 	}
 	// get system message
-	msg := d.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0)
+	msg := d.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0, math.MaxUint64/2)
 	// apply message
 	return d.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
 
 // get system message
-func (d *Drab) getSystemMessage(from, toAddress common.Address, data []byte, value *big.Int) callmsg {
+func (d *Drab) getSystemMessage(from, toAddress common.Address, data []byte, value *big.Int, gascap uint64) callmsg {
 	return callmsg{
 		ethereum.CallMsg{
-			From:     from,
-			Gas:      math.MaxUint64 / 2,
-			GasPrice: big.NewInt(0),
-			Value:    value,
-			To:       &toAddress,
-			Data:     data,
+			From:      from,
+			Gas:       gascap,
+			GasPrice:  big.NewInt(0),
+			GasFeeCap: new(big.Int).SetUint64(gascap),
+			Value:     value,
+			To:        &toAddress,
+			Data:      data,
 		},
 	}
 }
@@ -1160,7 +1142,17 @@ func (d *Drab) applyTransaction(
 	receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool,
 ) (err error) {
 	nonce := state.GetNonce(msg.From())
-	expectedTx := types.NewTransaction(nonce, *msg.To(), msg.Value(), msg.Gas(), msg.GasPrice(), msg.Data())
+	to := *msg.To()
+	expectedTx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   d.chainConfig.ChainID,
+		Nonce:     nonce,
+		GasTipCap: msg.GasPrice(),
+		GasFeeCap: msg.GasFeeCap,
+		Gas:       msg.Gas(),
+		To:        &to,
+		Value:     msg.Value(),
+		Data:      msg.Data(),
+	})
 	expectedHash := d.signer.Hash(expectedTx)
 
 	if msg.From() == d.val && mining {
@@ -1307,7 +1299,7 @@ func applyMessage(
 		vm.AccountRef(msg.From()),
 		*msg.To(),
 		msg.Data(),
-		msg.Gas(),
+		msg.GasFeeCap.Uint64(),
 		msg.Value(),
 	)
 	if err != nil {
