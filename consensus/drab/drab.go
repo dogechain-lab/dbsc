@@ -1094,7 +1094,7 @@ func (d *Drab) slash(spoiledValidator common.Address, state *state.StateDB, head
 		return err
 	}
 	// get system message
-	msg := d.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0, math.MaxUint64/2)
+	msg := d.getSystemMessage(header.Coinbase, common.HexToAddress(dccontracts.DCValidatorSetContract), data, common.Big0, header.BaseFee.Uint64())
 	// apply message
 	return d.applyTransaction(msg, state, header, chain, txs, receipts, receivedTxs, usedGas, mining)
 }
@@ -1125,7 +1125,7 @@ func (d *Drab) getSystemMessage(from, toAddress common.Address, data []byte, val
 			From:      from,
 			Gas:       gascap,
 			GasPrice:  big.NewInt(0),
-			GasFeeCap: new(big.Int).SetUint64(gascap),
+			GasFeeCap: big.NewInt(0),
 			Value:     value,
 			To:        &toAddress,
 			Data:      data,
@@ -1299,7 +1299,7 @@ func applyMessage(
 		vm.AccountRef(msg.From()),
 		*msg.To(),
 		msg.Data(),
-		msg.GasFeeCap.Uint64(),
+		msg.Gas(),
 		msg.Value(),
 	)
 	if err != nil {
