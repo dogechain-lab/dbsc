@@ -208,13 +208,9 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainHeaderRea
 		// cache recent signed
 		snap.Recents[number] = validator
 
-		// Change validator set a little after epoch change,
-		// so that validators fairly seal their turns.
-		if number > 0 && number%s.config.EpochSize == uint64(len(snap.Validators)/2) {
-			checkpointHeader := FindAncientHeader(header, uint64(len(snap.Validators)/2), chain, parents)
-			if checkpointHeader == nil {
-				return nil, consensus.ErrUnknownAncestor
-			}
+		// Change validator set at the beginning of epoch.
+		if number > 0 && number%s.config.EpochSize == 0 {
+			checkpointHeader := header
 
 			// parse validators from extra
 			validatorBytes := checkpointHeader.Extra[extraVanity : len(checkpointHeader.Extra)-extraSeal]
