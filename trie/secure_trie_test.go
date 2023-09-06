@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/gopool"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
@@ -121,7 +120,7 @@ func TestSecureTrieConcurrency(t *testing.T) {
 	pend.Add(threads)
 	for i := 0; i < threads; i++ {
 		index := i
-		gopool.Submit(func() {
+		go func() {
 			defer pend.Done()
 
 			for j := byte(0); j < 255; j++ {
@@ -139,7 +138,7 @@ func TestSecureTrieConcurrency(t *testing.T) {
 				}
 			}
 			tries[index].Commit(nil)
-		})
+		}()
 	}
 	// Wait for all threads to finish
 	pend.Wait()

@@ -9,7 +9,7 @@ import (
 
 var (
 	// Init a instance pool when importing ants.
-	defaultPool, _   = ants.NewPool(ants.DefaultAntsPoolSize, ants.WithExpiryDuration(10*time.Second))
+	defaultPool, _   = ants.NewPool(ants.DefaultAntsPoolSize, ants.WithExpiryDuration(time.Hour))
 	minNumberPerTask = 5
 )
 

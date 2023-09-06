@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/gopool"
 	natpmp "github.com/jackpal/go-nat-pmp"
 )
 
@@ -69,14 +68,14 @@ func discoverPMP() Interface {
 	found := make(chan *pmp, len(gws))
 	for i := range gws {
 		gw := gws[i]
-		gopool.Submit(func() {
+		go func() {
 			c := natpmp.NewClient(gw)
 			if _, err := c.GetExternalAddress(); err != nil {
 				found <- nil
 			} else {
 				found <- &pmp{gw, c}
 			}
-		})
+		}()
 	}
 	// return the one that responds first.
 	// discovery needs to be quick, so we stop caring about
