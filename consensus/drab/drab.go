@@ -452,18 +452,7 @@ func (d *Drab) verifyGasLimit(parent, header *types.Header) error {
 	if d.chainConfig.IsLondon(header.Number) {
 		return misc.VerifyEip1559Header(d.chainConfig, parent, header)
 	}
-
-	diff := int64(parent.GasLimit) - int64(header.GasLimit)
-	if diff < 0 {
-		diff *= -1
-	}
-	limit := parent.GasLimit / params.GasLimitBoundDivisor
-
-	if uint64(diff) >= limit || header.GasLimit < params.MinGasLimit {
-		return fmt.Errorf("invalid gas limit: have %d, want %d += %d", header.GasLimit, parent.GasLimit, limit)
-	}
-
-	return nil
+	return verifyGaslimit(parent.GasLimit, header.GasLimit)
 }
 
 // getParent returns the parent of a given block.

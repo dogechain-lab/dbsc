@@ -174,8 +174,7 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 	h.GasLimit = parent.GasLimit
 	if b.config.IsLondon(h.Number) {
 		h.BaseFee = misc.CalcBaseFee(b.config, parent)
-		h.BaseFee = misc.CalcBaseFee(b.config, parent)
-		if !b.config.IsLondon(parent.Number) {
+		if b.config.IsOnLondon(h.Number) {
 			parentGasLimit := parent.GasLimit * params.ElasticityMultiplier
 			h.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
 		}
@@ -316,7 +315,7 @@ func makeHeader(chain consensus.ChainReader, parent *types.Block, state *state.S
 	}
 	if chain.Config().IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(chain.Config(), parent.Header())
-		if !chain.Config().IsLondon(parent.Number()) {
+		if chain.Config().IsOnLondon(parent.Number()) {
 			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
 			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
 		}
