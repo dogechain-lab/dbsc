@@ -449,6 +449,10 @@ func (d *Drab) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 }
 
 func (d *Drab) verifyGasLimit(parent, header *types.Header) error {
+	if d.chainConfig.IsLondon(header.Number) {
+		return misc.VerifyEip1559Header(d.chainConfig, parent, header)
+	}
+
 	diff := int64(parent.GasLimit) - int64(header.GasLimit)
 	if diff < 0 {
 		diff *= -1

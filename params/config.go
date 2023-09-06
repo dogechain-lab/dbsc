@@ -630,6 +630,11 @@ func (c *ChainConfig) IsLondon(num *big.Int) bool {
 	return isForked(c.LondonBlock, num)
 }
 
+// IsOnLondon returns whether num is equal to the london fork block
+func (c *ChainConfig) IsOnLondon(num *big.Int) bool {
+	return configNumEqual(c.LondonBlock, num)
+}
+
 // IsArrowGlacier returns whether num is either equal to the Arrow Glacier (EIP-4345) fork block or greater.
 func (c *ChainConfig) IsArrowGlacier(num *big.Int) bool {
 	return isForked(c.ArrowGlacierBlock, num)
