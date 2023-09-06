@@ -284,7 +284,7 @@ func (d *Drab) IsSystemTransaction(tx *types.Transaction, header *types.Header) 
 		return false, nil
 	}
 
-	return false, nil
+	return true, nil
 }
 
 func (d *Drab) IsSystemContract(to *common.Address) bool {
