@@ -2022,7 +2022,14 @@ func EnableDCBuildInfo(gitCommit, gitDate string) SetupDCMetricsOption {
 	}
 }
 
-func SetupDCMetrics(ctx *cli.Context, chainID string) {
+func SetupDCMetrics(ctx *cli.Context, cfg *ethconfig.Config) {
+	if cfg.Genesis == nil ||
+		cfg.Genesis.Config == nil ||
+		cfg.Genesis.Config.Doge == nil ||
+		cfg.Genesis.Config.ChainID == nil {
+		return
+	}
+
 	if !metrics.Enabled {
 		return
 	}
@@ -2030,7 +2037,7 @@ func SetupDCMetrics(ctx *cli.Context, chainID string) {
 	log.Info("Enabling DC metrics collection")
 
 	// initializing
-	dcmetrics.ChainID = chainID
+	dcmetrics.ChainID = cfg.Genesis.Config.ChainID.String()
 	dcmetrics.SharedMetrics()
 
 	if ctx.GlobalIsSet(MetricsHTTPFlag.Name) {
