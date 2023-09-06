@@ -21,16 +21,37 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+// dogechain specific compatible
+var (
+	// Hawaii hard fork block number
+	DC_BLOCK_END_NUMBER int64 = -1
+)
+
+func DCBlockHeaderRange(number uint64) bool {
+	// overflow check
+	if number > uint64(math.MaxInt64) {
+		return false
+	}
+
+	if int64(number) <= DC_BLOCK_END_NUMBER {
+		return true
+	}
+
+	return false
+}
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
@@ -336,9 +357,12 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 		// comparison is necessary since ancient database only maintains
 		// the canonical data.
 		data, _ = reader.Ancient(freezerHeaderTable, number)
-		if len(data) > 0 {
+		if DCBlockHeaderRange(number) && len(data) > 0 {
+			return nil
+		} else if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 			return nil
 		}
+
 		// If not, try reading from leveldb
 		data, _ = db.Get(headerKey(number, hash))
 		return nil

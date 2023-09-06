@@ -181,7 +181,7 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 		utils.EnableNodeInfo(cfg.Eth.TxPool),
 	)
 
-	utils.SetupDCMetrics(ctx, cfg.Eth.Genesis.Config.ChainID.String())
+	utils.SetupDCMetrics(ctx, &cfg.Eth)
 
 	return stack, backend
 }

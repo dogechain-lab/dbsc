@@ -2,6 +2,7 @@ package dc
 
 import (
 	"errors"
+	"math"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -13,6 +14,7 @@ import (
 	"github.com/dogechain-lab/dogechain/consensus/ibft"
 	"github.com/dogechain-lab/dogechain/state"
 
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/dcmetrics"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
@@ -78,6 +80,15 @@ func New(
 	db ethdb.Database,
 	ethAPI *ethapi.PublicBlockChainAPI,
 ) (*DogeChain, error) {
+	// hack dogechain header rlp decode error
+	if chainConfig.HawaiiBlock == nil ||
+		chainConfig.HawaiiBlock.Uint64() == 0 ||
+		chainConfig.HawaiiBlock.Uint64() > uint64(math.MaxInt64) {
+		rawdb.DC_BLOCK_END_NUMBER = math.MaxInt64
+	} else {
+		rawdb.DC_BLOCK_END_NUMBER = int64(chainConfig.HawaiiBlock.Uint64())
+	}
+
 	logger := hclog.L()
 	dataDir := filepath.Join(config.DataDir, "dogechain")
 
