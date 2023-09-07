@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/clock"
 	"github.com/ethereum/go-ethereum/common/prque"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -339,11 +340,11 @@ func (f *BlockFetcher) FilterBodies(peer string, transactions [][]*types.Transac
 func (f *BlockFetcher) loop() {
 	// Iterate the block fetching until a quit is requested
 	var (
-		fetchTimer    = time.NewTimer(0)
-		completeTimer = time.NewTimer(0)
+		fetchTimer    = clock.NewTimer(0)
+		completeTimer = clock.NewTimer(0)
 	)
-	<-fetchTimer.C // clear out the channel
-	<-completeTimer.C
+	<-fetchTimer.C() // clear out the channel
+	<-completeTimer.C()
 	defer fetchTimer.Stop()
 	defer completeTimer.Stop()
 
@@ -445,7 +446,7 @@ func (f *BlockFetcher) loop() {
 			f.forgetHash(hash)
 			f.forgetBlock(hash)
 
-		case <-fetchTimer.C:
+		case <-fetchTimer.C():
 			// At least one block's timer ran out, check for needing retrieval
 			request := make(map[string][]common.Hash)
 
@@ -516,7 +517,7 @@ func (f *BlockFetcher) loop() {
 			// Schedule the next fetch if blocks are still pending
 			f.rescheduleFetch(fetchTimer)
 
-		case <-completeTimer.C:
+		case <-completeTimer.C():
 			// At least one header's timer ran out, retrieve everything
 			request := make(map[string][]common.Hash)
 
@@ -736,7 +737,7 @@ func (f *BlockFetcher) loop() {
 }
 
 // rescheduleFetch resets the specified fetch timer to the next blockAnnounce timeout.
-func (f *BlockFetcher) rescheduleFetch(fetch *time.Timer) {
+func (f *BlockFetcher) rescheduleFetch(fetch clock.Timer) {
 	// Short circuit if no blocks are announced
 	if len(f.announced) == 0 {
 		return
@@ -758,7 +759,7 @@ func (f *BlockFetcher) rescheduleFetch(fetch *time.Timer) {
 }
 
 // rescheduleComplete resets the specified completion timer to the next fetch timeout.
-func (f *BlockFetcher) rescheduleComplete(complete *time.Timer) {
+func (f *BlockFetcher) rescheduleComplete(complete clock.Timer) {
 	// Short circuit if no headers are fetched
 	if len(f.fetched) == 0 {
 		return

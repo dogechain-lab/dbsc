@@ -403,8 +403,12 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 				triggered <- struct{}{}
 				triggered = nil
 			}
+
+			timeout := time.NewTimer(freezerRecheckInterval)
+			defer timeout.Stop()
+
 			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
+			case <-timeout.C:
 			case triggered = <-f.trigger:
 			case <-f.quit:
 				return

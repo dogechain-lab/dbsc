@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/clock"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -63,7 +64,7 @@ func (h *handler) syncTransactions(p *eth.Peer) {
 // chainSyncer coordinates blockchain sync components.
 type chainSyncer struct {
 	handler     *handler
-	force       *time.Timer
+	force       clock.Timer
 	forced      bool // true when force timer fired
 	peerEventCh chan struct{}
 	doneCh      chan error // non-nil when sync is running
@@ -109,7 +110,7 @@ func (cs *chainSyncer) loop() {
 
 	// The force timer lowers the peer count threshold down to one when it fires.
 	// This ensures we'll always start sync even if there aren't enough peers.
-	cs.force = time.NewTimer(forceSyncCycle)
+	cs.force = clock.NewTimer(forceSyncCycle)
 	defer cs.force.Stop()
 
 	for {
@@ -123,7 +124,7 @@ func (cs *chainSyncer) loop() {
 			cs.doneCh = nil
 			cs.force.Reset(forceSyncCycle)
 			cs.forced = false
-		case <-cs.force.C:
+		case <-cs.force.C():
 			cs.forced = true
 
 		case <-cs.handler.quitSync:
