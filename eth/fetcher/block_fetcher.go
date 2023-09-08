@@ -771,7 +771,7 @@ func (f *BlockFetcher) rescheduleComplete(complete clock.Timer) {
 			earliest = announces[0].time
 		}
 	}
-	complete.Reset(gatherSlack - time.Since(earliest))
+	complete.Reset(clock.ClampDuration(gatherSlack-time.Since(earliest), time.Millisecond, time.Second))
 }
 
 // enqueue schedules a new header or block import operation, if the component
