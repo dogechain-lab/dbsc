@@ -8,6 +8,17 @@ type Timer interface {
 	Reset(d time.Duration) bool
 }
 
+// ClampDuration returns d if n <= d <= m, n if d < n, and m if d > m.
+func ClampDuration(d, n, m time.Duration) time.Duration {
+	if d < n {
+		return n
+	}
+	if d > m {
+		return m
+	}
+	return d
+}
+
 func NewTimer(d time.Duration) Timer {
 	return &realTimer{time.NewTimer(d)}
 }

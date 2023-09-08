@@ -755,7 +755,7 @@ func (f *BlockFetcher) rescheduleFetch(fetch clock.Timer) {
 			earliest = announces[0].time
 		}
 	}
-	fetch.Reset(arriveTimeout - time.Since(earliest))
+	fetch.Reset(clock.ClampDuration(arriveTimeout-time.Since(earliest), time.Millisecond, time.Second))
 }
 
 // rescheduleComplete resets the specified completion timer to the next fetch timeout.
