@@ -399,6 +399,12 @@ func (f *BlockFetcher) loop() {
 				if dist := int64(notification.number) - int64(f.chainHeight()); dist < -maxUncleDist || dist > maxQueueDist {
 					log.Debug("Peer discarded announcement", "peer", notification.origin, "number", notification.number, "hash", notification.hash, "distance", dist)
 					blockAnnounceDropMeter.Mark(1)
+					// if dist > maxQueueDist and not in announces count, drop peer
+					// forgetHash delete count
+					if count, ok := f.announces[notification.origin]; !ok || count <= 0 {
+						log.Debug("Peer too high, drop it", "peer", notification.origin, "number", notification.number, "hash", notification.hash, "distance", dist)
+						f.dropPeer(notification.origin)
+					}
 					break
 				}
 			}
