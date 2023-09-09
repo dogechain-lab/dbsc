@@ -26,6 +26,44 @@ func TestClampDuration(t *testing.T) {
 	}
 }
 
+func TestClampDurationToMin(t *testing.T) {
+	timer := NewTimer(0)
+	<-timer.C()
+
+	t.Cleanup(func() {
+		timer.Stop()
+	})
+
+	// clamp duration to 1 second
+	timer.Reset(ClampDuration(0, 1, 2))
+	startT := time.Now()
+	<-timer.C()
+	endT := time.Now()
+
+	if endT.Sub(startT) > (1*time.Second + 10*time.Millisecond) {
+		t.Errorf("ClampDuration failed to clamp duration to 1 second")
+	}
+}
+
+func TestClampDurationToMax(t *testing.T) {
+	timer := NewTimer(0)
+	<-timer.C()
+
+	t.Cleanup(func() {
+		timer.Stop()
+	})
+
+	// clamp duration to 2 seconds
+	timer.Reset(ClampDuration(3, 1, 2))
+	startT := time.Now()
+	<-timer.C()
+	endT := time.Now()
+
+	if endT.Sub(startT) > (2*time.Second + 10*time.Millisecond) {
+		t.Errorf("ClampDuration failed to clamp duration to 2 seconds")
+	}
+}
+
 func TestTimerReset(t *testing.T) {
 	timer := NewTimer(0)
 	<-timer.C()
