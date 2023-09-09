@@ -20,13 +20,21 @@ func ClampDuration(d, n, m time.Duration) time.Duration {
 }
 
 func NewTimer(d time.Duration) Timer {
-	return &realTimer{time.NewTimer(d)}
+	return &realTimer{timer: time.NewTimer(d)}
 }
 
+// https://go.dev/doc/faq#guarantee_satisfies_interface
 var _ = Timer(&realTimer{})
 
+// `go vet` gives a warning if this struct is copied.
+// https://github.com/golang/go/issues/8005#issuecomment-190753527
+type noCopy struct{}
+
+func (*noCopy) Lock() {}
+
 type realTimer struct {
-	timer *time.Timer
+	noCopy noCopy
+	timer  *time.Timer
 }
 
 // C returns the underlying timer's channel.
