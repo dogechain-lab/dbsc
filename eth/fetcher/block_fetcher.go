@@ -33,12 +33,10 @@ import (
 )
 
 const (
-	lightTimeout        = time.Millisecond       // Time allowance before an announced header is explicitly requested
-	arriveTimeout       = 500 * time.Millisecond // Time allowance before an announced block/transaction is explicitly requested
-	gatherSlack         = 100 * time.Millisecond // Interval used to collate almost-expired announces with fetches
-	fetchTimeout        = 5 * time.Second        // Maximum allotted time to return an explicitly requested block/transaction
-	reQueueBlockTimeout = 500 * time.Millisecond // Time allowance before blocks are requeued for import
-
+	lightTimeout  = time.Millisecond       // Time allowance before an announced header is explicitly requested
+	arriveTimeout = 500 * time.Millisecond // Time allowance before an announced block/transaction is explicitly requested
+	gatherSlack   = 100 * time.Millisecond // Interval used to collate almost-expired announces with fetches
+	fetchTimeout  = 5 * time.Second        // Maximum allotted time to return an explicitly requested block/transaction
 )
 
 const (
@@ -174,8 +172,6 @@ type BlockFetcher struct {
 	done chan common.Hash
 	quit chan struct{}
 
-	requeue chan *blockOrHeaderInject
-
 	// Announce states
 	announces  map[string]int                   // Per peer blockAnnounce counts to prevent memory exhaustion
 	announced  map[common.Hash][]*blockAnnounce // Announced blocks, scheduled for fetching
@@ -216,7 +212,6 @@ func NewBlockFetcher(light bool, getHeader HeaderRetrievalFn, getBlock blockRetr
 		bodyFilter:     make(chan chan *bodyFilterTask),
 		done:           make(chan common.Hash),
 		quit:           make(chan struct{}),
-		requeue:        make(chan *blockOrHeaderInject),
 		announces:      make(map[string]int),
 		announced:      make(map[common.Hash][]*blockAnnounce),
 		fetching:       make(map[common.Hash]*blockAnnounce),
@@ -427,21 +422,6 @@ func (f *BlockFetcher) loop() {
 			if len(f.announced) == 1 {
 				f.rescheduleFetch(fetchTimer)
 			}
-
-		case op := <-f.requeue:
-			// Re-queue blocks that have not been written due to fork block competition
-			number := int64(0)
-			hash := ""
-			if op.header != nil {
-				number = op.header.Number.Int64()
-				hash = op.header.Hash().String()
-			} else if op.block != nil {
-				number = op.block.Number().Int64()
-				hash = op.block.Hash().String()
-			}
-
-			log.Info("Re-queue blocks", "number", number, "hash", hash)
-			f.enqueue(op.origin, op.header, op.block)
 
 		case op := <-f.inject:
 			// A direct block insertion was requested, try and fill any pending gaps
@@ -842,18 +822,13 @@ func (f *BlockFetcher) importHeaders(op *blockOrHeaderInject) {
 	log.Debug("Importing propagated header", "peer", peer, "number", header.Number, "hash", hash)
 
 	go func() {
+		defer func() { f.done <- hash }()
 		// If the parent's unknown, abort insertion
 		parent := f.getHeader(header.ParentHash)
 		if parent == nil {
 			log.Debug("Unknown parent of propagated header", "peer", peer, "number", header.Number, "hash", hash, "parent", header.ParentHash)
-			time.Sleep(reQueueBlockTimeout)
-			// forget block first, then re-queue
-			f.done <- hash
-			f.requeue <- op
 			return
 		}
-
-		defer func() { f.done <- hash }()
 		// Validate the header and if something went wrong, drop the peer
 		if err := f.verifyHeader(header); err != nil && err != consensus.ErrFutureBlock {
 			log.Debug("Propagated header verification failed", "peer", peer, "number", header.Number, "hash", hash, "err", err)
@@ -883,18 +858,14 @@ func (f *BlockFetcher) importBlocks(op *blockOrHeaderInject) {
 	// Run the import on a new thread
 	log.Debug("Importing propagated block", "peer", peer, "number", block.Number(), "hash", hash)
 	go func() {
+		defer func() { f.done <- hash }()
+
 		// If the parent's unknown, abort insertion
 		parent := f.getBlock(block.ParentHash())
 		if parent == nil {
 			log.Debug("Unknown parent of propagated block", "peer", peer, "number", block.Number(), "hash", hash, "parent", block.ParentHash())
-			time.Sleep(reQueueBlockTimeout)
-			// forget block first, then re-queue
-			f.done <- hash
-			f.requeue <- op
 			return
 		}
-
-		defer func() { f.done <- hash }()
 		// Quickly validate the header and propagate the block if it passes
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
@@ -903,12 +874,11 @@ func (f *BlockFetcher) importBlocks(op *blockOrHeaderInject) {
 			go f.broadcastBlock(block, true)
 
 		case consensus.ErrFutureBlock:
-			log.Error("Received future block", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
-			f.dropPeer(peer)
+			// Weird future block, don't fail, but neither propagate
 
 		default:
 			// Something went very wrong, drop the peer
-			log.Error("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
+			log.Debug("Propagated block verification failed", "peer", peer, "number", block.Number(), "hash", hash, "err", err)
 			f.dropPeer(peer)
 			return
 		}
