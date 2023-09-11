@@ -8,7 +8,7 @@ import (
 
 var (
 	// Init a instance pool when importing ants.
-	defaultPool, _   = ants.NewPool(ants.DefaultAntsPoolSize, ants.WithDisablePurge(true), ants.WithPreAlloc(true))
+	defaultPool, _   = ants.NewPool(ants.DefaultAntsPoolSize, ants.WithDisablePurge(true))
 	minNumberPerTask = 5
 )
 
