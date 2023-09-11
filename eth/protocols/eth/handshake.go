@@ -41,7 +41,7 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 
 	var status StatusPacket // safe to read after two values have been received from errc
 
-	gopool.Submit(func() {
+	go func() {
 		errc <- p2p.Send(p.rw, StatusMsg, &StatusPacket{
 			ProtocolVersion: uint32(p.version),
 			NetworkID:       network,
@@ -50,10 +50,10 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 			Genesis:         genesis,
 			ForkID:          forkID,
 		})
-	})
-	gopool.Submit(func() {
+	}()
+	go func() {
 		errc <- p.readStatus(network, &status, genesis, forkFilter)
-	})
+	}()
 	timeout := time.NewTimer(handshakeTimeout)
 	defer timeout.Stop()
 	for i := 0; i < 2; i++ {

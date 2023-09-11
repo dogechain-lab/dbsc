@@ -2,14 +2,13 @@ package gopool
 
 import (
 	"runtime"
-	"time"
 
 	"github.com/panjf2000/ants/v2"
 )
 
 var (
 	// Init a instance pool when importing ants.
-	defaultPool, _   = ants.NewPool(ants.DefaultAntsPoolSize, ants.WithExpiryDuration(10*time.Second))
+	defaultPool, _   = ants.NewPool(ants.DefaultAntsPoolSize, ants.WithDisablePurge(true))
 	minNumberPerTask = 5
 )
 

@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/accounts/scwallet"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/gopool"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -928,10 +927,10 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 	}
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)
-	gopool.Submit(func() {
+	go func() {
 		<-ctx.Done()
 		evm.Cancel()
-	})
+	}()
 
 	// Execute the message.
 	gp := new(core.GasPool).AddGas(math.MaxUint64)

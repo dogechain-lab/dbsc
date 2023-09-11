@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common/gopool"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/debug"
@@ -142,7 +141,7 @@ func (api *privateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 	}
 	rpcSub := notifier.CreateSubscription()
 
-	gopool.Submit(func() {
+	go func() {
 		events := make(chan *p2p.PeerEvent)
 		sub := server.SubscribeEvents(events)
 		defer sub.Unsubscribe()
@@ -159,7 +158,7 @@ func (api *privateAdminAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, 
 				return
 			}
 		}
-	})
+	}()
 
 	return rpcSub, nil
 }

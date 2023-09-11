@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/bitutil"
-	"github.com/ethereum/go-ethereum/common/gopool"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -84,7 +83,7 @@ type Matcher struct {
 	retrievals chan chan *Retrieval // Retriever processes waiting for task allocations
 	deliveries chan *Retrieval      // Retriever processes waiting for task response deliveries
 
-	running uint32 // Atomic flag whether a session is live or not
+	running atomic.Bool // Atomic flag whether a session is live or not
 }
 
 // NewMatcher creates a new pipeline for retrieving bloom bit streams and doing
@@ -147,10 +146,10 @@ func (m *Matcher) addScheduler(idx uint) {
 // channel is closed.
 func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uint64) (*MatcherSession, error) {
 	// Make sure we're not creating concurrent sessions
-	if atomic.SwapUint32(&m.running, 1) == 1 {
+	if m.running.Swap(true) {
 		return nil, errors.New("matcher already running")
 	}
-	defer atomic.StoreUint32(&m.running, 0)
+	defer m.running.Store(false)
 
 	// Initiate a new matching round
 	session := &MatcherSession{
@@ -165,7 +164,7 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 
 	// Read the output from the result sink and deliver to the user
 	session.pend.Add(1)
-	gopool.Submit(func() {
+	go func() {
 		defer session.pend.Done()
 		defer close(results)
 
@@ -211,7 +210,7 @@ func (m *Matcher) Start(ctx context.Context, begin, end uint64, results chan uin
 				}
 			}
 		}
-	})
+	}()
 	return session, nil
 }
 
@@ -227,7 +226,7 @@ func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) ch
 	source := make(chan *partialMatches, buffer)
 
 	session.pend.Add(1)
-	gopool.Submit(func() {
+	go func() {
 		defer session.pend.Done()
 		defer close(source)
 
@@ -238,7 +237,7 @@ func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) ch
 			case source <- &partialMatches{i, bytes.Repeat([]byte{0xff}, int(m.sectionSize/8))}:
 			}
 		}
-	})
+	}()
 	// Assemble the daisy-chained filtering pipeline
 	next := source
 	dist := make(chan *request, buffer)
@@ -248,9 +247,7 @@ func (m *Matcher) run(begin, end uint64, buffer int, session *MatcherSession) ch
 	}
 	// Start the request distribution
 	session.pend.Add(1)
-	gopool.Submit(func() {
-		m.distributor(dist, session)
-	})
+	go m.distributor(dist, session)
 
 	return next
 }
@@ -276,7 +273,7 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 	results := make(chan *partialMatches, cap(source))
 
 	session.pend.Add(2)
-	gopool.Submit(func() {
+	go func() {
 		// Tear down the goroutine and terminate all source channels
 		defer session.pend.Done()
 		defer close(process)
@@ -317,9 +314,9 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 				}
 			}
 		}
-	})
+	}()
 
-	gopool.Submit(func() {
+	go func() {
 		// Tear down the goroutine and terminate the final sink channel
 		defer session.pend.Done()
 		defer close(results)
@@ -375,7 +372,7 @@ func (m *Matcher) subMatch(source chan *partialMatches, dist chan *request, bloo
 				}
 			}
 		}
-	})
+	}()
 	return results
 }
 
