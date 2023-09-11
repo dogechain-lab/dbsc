@@ -908,6 +908,12 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 			args.ChainID = (*hexutil.Big)(b.ChainConfig().ChainID)
 		}
 
+		// DC call does not need to check nonce
+		if args.Nonce == nil {
+			fromNomce, _ := b.GetPoolNonce(ctx, *args.From)
+			args.Nonce = (*hexutil.Uint64)(&fromNomce)
+		}
+
 		if args.Gas == nil {
 			gaslimit := hexutil.Uint64(header.GasLimit)
 			args.Gas = &gaslimit
