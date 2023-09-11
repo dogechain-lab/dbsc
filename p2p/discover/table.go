@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/clock"
 	"github.com/ethereum/go-ethereum/common/gopool"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -218,7 +219,7 @@ func (tab *Table) refresh() <-chan struct{} {
 // loop schedules runs of doRefresh, doRevalidate and copyLiveNodes.
 func (tab *Table) loop() {
 	var (
-		revalidate     = time.NewTimer(tab.nextRevalidateTime())
+		revalidate     = clock.NewTimer(tab.nextRevalidateTime())
 		refresh        = time.NewTicker(refreshInterval)
 		copyNodes      = time.NewTicker(copyNodesInterval)
 		refreshDone    = make(chan struct{})           // where doRefresh reports completion
@@ -258,7 +259,7 @@ loop:
 				close(ch)
 			}
 			waiting, refreshDone = nil, nil
-		case <-revalidate.C:
+		case <-revalidate.C():
 			revalidateDone = make(chan struct{})
 			gopool.Submit(func() {
 				tab.doRevalidate(revalidateDone)

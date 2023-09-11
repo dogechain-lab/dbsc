@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/clock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -265,7 +266,7 @@ func (f *lightFetcher) mainloop() {
 		ulc          = f.ulc != nil
 		headCh       = make(chan core.ChainHeadEvent, 100)
 		fetching     = make(map[uint64]*request)
-		requestTimer = time.NewTimer(0)
+		requestTimer = clock.NewTimer(0)
 
 		// Local status
 		localHead = f.chain.CurrentHeader()
@@ -365,7 +366,7 @@ func (f *lightFetcher) mainloop() {
 				f.rescheduleTimer(fetching, requestTimer)
 			}
 
-		case <-requestTimer.C:
+		case <-requestTimer.C():
 			for reqid, request := range fetching {
 				if time.Since(request.sendAt) > blockDelayTimeout-gatherSlack {
 					delete(fetching, reqid)
@@ -551,7 +552,7 @@ func (f *lightFetcher) deliverHeaders(peer *serverPeer, reqid uint64, headers []
 }
 
 // rescheduleTimer resets the specified timeout timer to the next request timeout.
-func (f *lightFetcher) rescheduleTimer(requests map[uint64]*request, timer *time.Timer) {
+func (f *lightFetcher) rescheduleTimer(requests map[uint64]*request, timer clock.Timer) {
 	// Short circuit if no inflight requests
 	if len(requests) == 0 {
 		timer.Stop()

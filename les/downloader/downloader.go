@@ -30,6 +30,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/clock"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -995,11 +996,11 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 	defer p.log.Debug("Header download terminated")
 
 	// Create a timeout timer, and the associated header fetcher
-	skeleton := true            // Skeleton assembly phase or finishing up
-	pivoting := false           // Whether the next request is pivot verification
-	request := time.Now()       // time of the last skeleton fetch request
-	timeout := time.NewTimer(0) // timer to dump a non-responsive active peer
-	<-timeout.C                 // timeout channel should be initially empty
+	skeleton := true             // Skeleton assembly phase or finishing up
+	pivoting := false            // Whether the next request is pivot verification
+	request := time.Now()        // time of the last skeleton fetch request
+	timeout := clock.NewTimer(0) // timer to dump a non-responsive active peer
+	<-timeout.C()                // timeout channel should be initially empty
 	defer timeout.Stop()
 
 	var ttl time.Duration
@@ -1187,7 +1188,7 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				}
 			}
 
-		case <-timeout.C:
+		case <-timeout.C():
 			if d.dropPeer == nil {
 				// The dropPeer method is nil when `--copydb` is used for a local copy.
 				// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored

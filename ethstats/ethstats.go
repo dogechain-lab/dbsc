@@ -32,6 +32,7 @@ import (
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/clock"
 	"github.com/ethereum/go-ethereum/common/mclock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core"
@@ -263,14 +264,14 @@ func (s *Service) loop(chainHeadCh chan core.ChainHeadEvent, txEventCh chan core
 		urls = []string{"wss://" + path, "ws://" + path}
 	}
 
-	errTimer := time.NewTimer(0)
+	errTimer := clock.NewTimer(0)
 	defer errTimer.Stop()
 	// Loop reporting until termination
 	for {
 		select {
 		case <-quitCh:
 			return
-		case <-errTimer.C:
+		case <-errTimer.C():
 			// Establish a websocket connection to the server on any supported URL
 			var (
 				conn *connWrapper

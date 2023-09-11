@@ -192,8 +192,11 @@ func (f *prunedfreezer) freeze() {
 		default:
 		}
 		if backoff {
+			timeout := time.NewTimer(freezerRecheckInterval)
+			defer timeout.Stop()
+
 			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
+			case <-timeout.C:
 			case <-f.quit:
 				return
 			}
