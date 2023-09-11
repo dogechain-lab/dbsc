@@ -180,7 +180,7 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainHeaderRea
 	for _, header := range headers {
 		number := header.Number.Uint64()
 		// Delete the oldest validator from the recent list to allow it signing again
-		if limit := uint64(len(snap.Validators)/2 + 1); number >= limit {
+		if limit := uint64(snap.blockLimit()); number >= limit {
 			delete(snap.Recents, number-limit)
 		}
 		if limit := uint64(len(snap.Validators)); number >= limit {
@@ -227,8 +227,8 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainHeaderRea
 			}
 
 			// remove oldest validator signature flags to free them signable again
-			oldLimit := len(snap.Validators)/2 + 1
-			newLimit := len(newValSet)/2 + 1
+			oldLimit := snap.blockLimit()
+			newLimit := recentValidatorLimit(newValArr)
 			if newLimit < oldLimit {
 				for i := 0; i < oldLimit-newLimit; i++ {
 					delete(snap.Recents, number-uint64(newLimit)-uint64(i))
@@ -265,7 +265,11 @@ func (s *Snapshot) includeValidator(validator common.Address) bool {
 
 // blockLimit returns block range limit to seal again.
 func (s *Snapshot) blockLimit() int {
-	vlen := len(s.Validators)
+	return recentValidatorLimit(s.Validators)
+}
+
+func recentValidatorLimit(validators []common.Address) int {
+	vlen := len(validators)
 	switch {
 	case vlen <= 4:
 		return vlen/3 + 1
