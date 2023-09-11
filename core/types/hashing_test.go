@@ -318,7 +318,7 @@ func TestHeader_Hasher(t *testing.T) {
 			expHash: common.HexToHash("0x21e7c0e3322a45292bae14f8e4ce5bea537908766397d43fabb32e03970a249e"),
 		},
 		{
-			name: "ibft genesis header",
+			name: "dc genesis header",
 			data: &types.Header{
 				ParentHash:  common.Hash{},
 				UncleHash:   common.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
@@ -339,7 +339,7 @@ func TestHeader_Hasher(t *testing.T) {
 			expHash: common.HexToHash("0x75d36607ff0e081d53cf9999d3abd2050f1865e443fe2197236e0ab76aad4443"),
 		},
 		{
-			name: "ibft chain header",
+			name: "dc chain header",
 			data: &types.Header{
 				ParentHash:  common.HexToHash("0x98295ad58f5ccab9d79efc55d15ecbf1f06dfc30f0cfd0125a28d5d7ee2270e6"),
 				UncleHash:   common.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
@@ -358,6 +358,28 @@ func TestHeader_Hasher(t *testing.T) {
 				Nonce:       types.BlockNonce{},
 			},
 			expHash: common.HexToHash("0x9b84a2811d55ec8fe72d223b81554a109c3591aa9e4330bc80078921009f0b94"),
+		},
+		{
+			name: "dc hawaii fork chain header",
+			data: &types.Header{
+				ParentHash:  common.HexToHash("0x7e53e2e6e4f1dde9a013bee4f5512254735d2316ef3533a2ccdb4b310bd89778"),
+				UncleHash:   common.HexToHash("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"),
+				Coinbase:    common.HexToAddress("0x598f7be31d758ef38ae854eab6049ae0756c8061"),
+				Root:        common.HexToHash("0x7a1fbf29ec5f0ba9c557c1ed475249626e0367a46bf4b7ef557a5e289384cc46"),
+				TxHash:      common.HexToHash("0xe978b304e7c6de4a96d89c5e434e74a6480ce35257aa56cea9c71c55b28a90a7"),
+				ReceiptHash: common.HexToHash("0x05abfe8819340456ecca1123d99f0757a4bd468f2599684add65f646607c4ee9"),
+				Bloom:       types.BytesToBloom(common.Hex2Bytes("0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")),
+				Difficulty:  big.NewInt(2),
+				Number:      big.NewInt(1),
+				GasLimit:    0x1c9c380,
+				GasUsed:     0x9e3,
+				Time:        0x64feb2e1,
+				Extra:       common.Hex2Bytes("d983010115846765746888676f312e31392e388664617277696e00004b1fbebfd393677b0229308737e414ca73c5447fdf59bdc78e59dfd7234d8289ac6b27ea1c6695579db1a98a88e19bcdd18d033599d3f5ed738dfd7c3138309499074a2a00"),
+				MixDigest:   types.DrapMixHash,
+				Nonce:       types.BlockNonce{},
+				BaseFee:     big.NewInt(0),
+			},
+			expHash: common.HexToHash("0xd2993fb4a05ddaf4f47bc03e9bfdef386b20d8c33ec24f95641cf9d755449c65"),
 		},
 	} {
 		tc := tc
