@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -70,7 +69,7 @@ func TestOfflineBlockPrune(t *testing.T) {
 }
 
 func testOfflineBlockPruneWithAmountReserved(t *testing.T, amountReserved uint64) {
-	datadir, err := ioutil.TempDir("", "")
+	datadir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("Failed to create temporary datadir: %v", err)
 	}

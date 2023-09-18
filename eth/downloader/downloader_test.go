@@ -19,7 +19,6 @@ package downloader
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"strings"
@@ -56,7 +55,7 @@ type downloadTester struct {
 
 // newTester creates a new downloader test mocker.
 func newTester() *downloadTester {
-	freezer, err := ioutil.TempDir("", "")
+	freezer, err := os.MkdirTemp("", "")
 	if err != nil {
 		panic(err)
 	}
