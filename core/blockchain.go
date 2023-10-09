@@ -535,20 +535,6 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
 }
 
-func (bc *BlockChain) cacheReceipts(hash common.Hash, receipts types.Receipts) {
-	// TODO, This is a hot fix for the block hash of logs is `0x0000000000000000000000000000000000000000000000000000000000000000` for system tx
-	// Please check details in https://github.com/binance-chain/bsc/issues/443
-	// This is a temporary fix, the official fix should be a hard fork.
-	const possibleSystemReceipts = 3 // One slash tx, two reward distribute txs.
-	numOfReceipts := len(receipts)
-	for i := numOfReceipts - 1; i >= 0 && i >= numOfReceipts-possibleSystemReceipts; i-- {
-		for j := 0; j < len(receipts[i].Logs); j++ {
-			receipts[i].Logs[j].BlockHash = hash
-		}
-	}
-	bc.receiptsCache.Add(hash, receipts)
-}
-
 func (bc *BlockChain) cacheDiffLayer(diffLayer *types.DiffLayer, diffLayerCh chan struct{}) {
 	// The difflayer in the system is stored by the map structure,
 	// so it will be out of order.
@@ -582,10 +568,6 @@ func (bc *BlockChain) cacheDiffLayer(diffLayer *types.DiffLayer, diffLayerCh cha
 		// push to priority queue before persisting
 		bc.diffQueueBuffer <- diffLayer
 	}
-}
-
-func (bc *BlockChain) cacheBlock(hash common.Hash, block *types.Block) {
-	bc.blockCache.Add(hash, block)
 }
 
 // empty returns an indicator whether the blockchain is empty.
@@ -1985,8 +1967,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 				return it.index, err
 			}
 		}
-		bc.cacheReceipts(block.Hash(), receipts)
-		bc.cacheBlock(block.Hash(), block)
+
 		proctime := time.Since(start)
 
 		// Update the metrics touched during block validation
