@@ -966,7 +966,24 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		dcTxArgs.Input = (*hexutil.Bytes)(&input)
 
 		if dcTxArgs.Gas == nil {
-			dcTxArgs.Gas = &zeroUint64
+			gaslimit := hexutil.Uint64(header.GasLimit)
+			dcTxArgs.Gas = &gaslimit
+
+			result, err := dc.DoCall(dcTxArgs, header, globalGasCap)
+			if err != nil {
+				return nil, err
+			}
+
+			if result.Error() != nil {
+				return &core.ExecutionResult{
+					UsedGas:    result.UsedGas(),
+					ReturnData: result.ReturnData(),
+					Err:        result.Error(),
+				}, nil
+			}
+
+			useGas := hexutil.Uint64(result.UsedGas())
+			dcTxArgs.Gas = &useGas
 		}
 
 		result, err := dc.DoCall(dcTxArgs, header, globalGasCap)
