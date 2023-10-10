@@ -909,7 +909,7 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 		}
 
 		// DC call does not need to check nonce
-		if args.Nonce == nil {
+		if args.From != nil && args.Nonce == nil {
 			fromNomce, _ := b.GetPoolNonce(ctx, *args.From)
 			args.Nonce = (*hexutil.Uint64)(&fromNomce)
 		}
@@ -1130,7 +1130,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
 
-		fromNomce, _ := b.GetPoolNonce(ctx, *args.From)
+		fromNomce, _ := b.GetPoolNonce(ctx, *args.From) // from can't be nil
 		args.Nonce = (*hexutil.Uint64)(&fromNomce)
 
 		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
