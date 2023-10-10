@@ -62,8 +62,15 @@ func DcTxToDbscTx(tx *types.Transaction) *dbscTypes.Transaction {
 func TxnArgsToTx(arg *dbscConsensus.DcTxnArgs) *types.Transaction {
 	from := DbscAddressToDcAddress(*arg.From)
 
+	var to *types.Address = nil
+	if arg.To != nil {
+		toAddress := DbscAddressToDcAddress(*arg.To)
+		to = &toAddress
+	}
+
 	txn := &types.Transaction{
 		From:     from,
+		To:       to,
 		Gas:      uint64(*arg.Gas),
 		GasPrice: arg.GasPrice.ToInt(),
 		Value:    arg.Value.ToInt(),
