@@ -172,7 +172,7 @@ func (dc *DogeChain) Delay(chain consensus.ChainReader, header *types.Header, le
 	return nil
 }
 
-func (dc *DogeChain) DoCall(msg *types.Message, header *types.Header, globalGasCap uint64) (consensus.ExecutionResult, error) {
+func (dc *DogeChain) DoCall(msg *consensus.DcTxnArgs, header *types.Header, globalGasCap uint64) (consensus.ExecutionResult, error) {
 	dcHeader, exist := dc.blockchain.GetHeaderByHash(DbscHashToDcHash(header.Hash()))
 	if !exist {
 		return nil, errBlockHeaderNotExists
@@ -192,7 +192,7 @@ func (dc *DogeChain) DoCall(msg *types.Message, header *types.Header, globalGasC
 		return nil, err
 	}
 
-	txn := DbscMsgToTx(msg)
+	txn := TxnArgsToTx(msg)
 	result, err := transition.Apply(txn)
 	if err != nil {
 		return nil, err

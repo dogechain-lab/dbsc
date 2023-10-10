@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -157,9 +158,20 @@ type ExecutionResult interface {
 	Error() error
 }
 
+type DcTxnArgs struct {
+	From     *common.Address
+	To       *common.Address
+	Gas      *hexutil.Uint64
+	GasPrice *hexutil.Big
+	Value    *hexutil.Big
+	Nonce    *hexutil.Uint64
+	Data     *hexutil.Bytes
+	Input    *hexutil.Bytes
+}
+
 type DC interface {
 	Engine
 
-	DoCall(tx *types.Message, header *types.Header, globalGasCap uint64) (ExecutionResult, error)
+	DoCall(tx *DcTxnArgs, header *types.Header, globalGasCap uint64) (ExecutionResult, error)
 	Process(block *types.Block, statedb *state.StateDB) (*state.StateDB, types.Receipts, []*types.Log, uint64, error)
 }

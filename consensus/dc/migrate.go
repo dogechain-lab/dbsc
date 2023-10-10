@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 
 	dbscCommon "github.com/ethereum/go-ethereum/common"
+	dbscConsensus "github.com/ethereum/go-ethereum/consensus"
 	dbscTypes "github.com/ethereum/go-ethereum/core/types"
 	dbscParams "github.com/ethereum/go-ethereum/params"
 )
@@ -58,23 +59,21 @@ func DcTxToDbscTx(tx *types.Transaction) *dbscTypes.Transaction {
 	})
 }
 
-func DbscMsgToTx(msg *dbscTypes.Message) *types.Transaction {
-	var toAddress *types.Address = nil
+func TxnArgsToTx(arg *dbscConsensus.DcTxnArgs) *types.Transaction {
+	from := DbscAddressToDcAddress(*arg.From)
 
-	if msg.To() != nil {
-		add := types.Address(*msg.To())
-		toAddress = &add
+	txn := &types.Transaction{
+		From:     from,
+		Gas:      uint64(*arg.Gas),
+		GasPrice: arg.GasPrice.ToInt(),
+		Value:    arg.Value.ToInt(),
+		Input:    *arg.Input,
+		Nonce:    uint64(*arg.Nonce),
 	}
 
-	return &types.Transaction{
-		Nonce:    msg.Nonce(),
-		GasPrice: msg.GasPrice(),
-		Gas:      msg.Gas(),
-		To:       toAddress,
-		Value:    msg.Value(),
-		Input:    msg.Data(),
-		From:     types.Address(msg.From()),
-	}
+	txn.Hash()
+
+	return txn
 }
 
 func DbscTxToDcTx(signer dbscTypes.Signer, tx *dbscTypes.Transaction) (*types.Transaction, error) {

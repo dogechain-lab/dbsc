@@ -904,47 +904,72 @@ func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash 
 			return nil, err
 		}
 
-		if args.ChainID == nil {
-			args.ChainID = (*hexutil.Big)(b.ChainConfig().ChainID)
+		if args.ChainID != nil {
+			var chainID = b.ChainConfig().ChainID
+			if args.ChainID.ToInt().Cmp(chainID) != 0 {
+				return nil, fmt.Errorf("invalid chain id %s, expected %s", args.ChainID.String(), chainID.String())
+			}
 		}
 
-		// DC call does not need to check nonce
-		if args.From != nil && args.Nonce == nil {
-			fromNomce, _ := b.GetPoolNonce(ctx, *args.From)
-			args.Nonce = (*hexutil.Uint64)(&fromNomce)
+		dcTxArgs := &consensus.DcTxnArgs{
+			From:     args.From,
+			To:       args.To,
+			Gas:      args.Gas,
+			GasPrice: args.GasPrice,
+			Value:    args.Value,
+			Nonce:    args.Nonce,
+			Data:     args.Data,
+			Input:    args.Input,
 		}
 
-		if args.Gas == nil {
-			gaslimit := hexutil.Uint64(header.GasLimit)
-			args.Gas = &gaslimit
-			msg, err := args.ToMessageWithNonce(globalGasCap, header.BaseFee)
+		//// from dogechain/jsonrpc/eth_endpoint.go#L922
+		// set default values
+		var zeroUint64 = hexutil.Uint64(0)
+		if dcTxArgs.From == nil {
+			dcTxArgs.From = &(common.Address{})
+			dcTxArgs.Nonce = &zeroUint64
+		} else if dcTxArgs.Nonce == nil {
+			// get nonce from the pool
+			fromNomce, err := b.GetPoolNonce(ctx, *args.From)
 			if err != nil {
 				return nil, err
 			}
 
-			result, err := dc.DoCall(&msg, header, globalGasCap)
-			if err != nil {
-				return nil, err
-			}
-
-			if result.Error() != nil {
-				return &core.ExecutionResult{
-					UsedGas:    result.UsedGas(),
-					ReturnData: result.ReturnData(),
-					Err:        result.Error(),
-				}, nil
-			}
-
-			useGas := hexutil.Uint64(result.UsedGas())
-			args.Gas = &useGas
+			dcTxArgs.Nonce = (*hexutil.Uint64)(&fromNomce)
 		}
 
-		msg, err := args.ToMessageWithNonce(globalGasCap, header.BaseFee)
-		if err != nil {
-			return nil, err
+		if dcTxArgs.Value == nil {
+			dcTxArgs.Value = (*hexutil.Big)(big.NewInt(0))
 		}
 
-		result, err := dc.DoCall(&msg, header, globalGasCap)
+		if dcTxArgs.GasPrice == nil {
+			dcTxArgs.GasPrice = (*hexutil.Big)(big.NewInt(0))
+		}
+
+		var input []byte
+		if dcTxArgs.Data != nil {
+			input = *dcTxArgs.Data
+		} else if dcTxArgs.Input != nil {
+			input = *dcTxArgs.Input
+		}
+
+		if dcTxArgs.To == nil {
+			if input == nil {
+				return nil, fmt.Errorf("contract creation without data provided")
+			}
+		}
+
+		if input == nil {
+			input = []byte{}
+		}
+
+		dcTxArgs.Input = (*hexutil.Bytes)(&input)
+
+		if dcTxArgs.Gas == nil {
+			dcTxArgs.Gas = &zeroUint64
+		}
+
+		result, err := dc.DoCall(dcTxArgs, header, globalGasCap)
 		if err != nil && result == nil {
 			return nil, err
 		}
