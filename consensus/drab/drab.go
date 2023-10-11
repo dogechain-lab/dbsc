@@ -685,7 +685,9 @@ func (d *Drab) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	if len(header.Extra) < extraVanity-nextForkHashSize {
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-nextForkHashSize-len(header.Extra))...)
 	}
+	// reset to 28 bytes
 	header.Extra = header.Extra[:extraVanity-nextForkHashSize]
+	// append next fork hash (only 4 bytes)
 	nextForkHash := forkid.NextForkHash(d.chainConfig, d.genesisHash, number)
 	header.Extra = append(header.Extra, nextForkHash[:]...)
 
@@ -740,9 +742,10 @@ func (d *Drab) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 		if err != nil {
 			return err
 		}
-		validatorsBytes := make([]byte, len(newValidators)*validatorBytesLength)
-		for i, validator := range newValidators {
-			copy(validatorsBytes[i*validatorBytesLength:], validator.Bytes())
+		// Join validator addresses into one slice
+		validatorsBytes := make([]byte, 0, len(newValidators)*validatorBytesLength)
+		for _, validator := range newValidators {
+			validatorsBytes = append(validatorsBytes, validator.Bytes()...)
 		}
 
 		extraSuffix := len(header.Extra) - extraSeal
@@ -1076,7 +1079,7 @@ func (d *Drab) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int)
 	blockNr := rpc.BlockNumberOrHashWithHash(blockHash, false)
 
 	// method
-	method := "getValidators"
+	method := "validators"
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // cancel when we are finished consuming integers
@@ -1099,19 +1102,11 @@ func (d *Drab) getCurrentValidators(blockHash common.Hash, blockNumber *big.Int)
 		return nil, err
 	}
 
-	var (
-		ret0 = new([]common.Address)
-	)
-	out := ret0
-
-	if err := d.validatorSetABI.UnpackIntoInterface(out, method, result); err != nil {
+	var validators []common.Address
+	if err := d.validatorSetABI.UnpackIntoInterface(&validators, method, result); err != nil {
 		return nil, err
 	}
-
-	valz := make([]common.Address, len(*ret0))
-	copy(valz, *ret0)
-
-	return valz, nil
+	return validators, nil
 }
 
 // slash spoiled validators

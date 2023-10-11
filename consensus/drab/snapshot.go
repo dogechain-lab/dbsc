@@ -127,13 +127,13 @@ func (s *Snapshot) copy() *Snapshot {
 		validatorSet:     make(map[common.Address]struct{}),
 		Number:           s.Number,
 		Hash:             s.Hash,
-		Validators:       make([]common.Address, len(s.Validators)),
+		Validators:       make([]common.Address, 0, len(s.Validators)),
 		Recents:          make(map[uint64]common.Address),
 		RecentForkHashes: make(map[uint64]string),
 	}
 
-	for i, v := range s.Validators {
-		cpy.Validators[i] = v
+	for _, v := range s.Validators {
+		cpy.Validators = append(cpy.Validators, v)
 		cpy.validatorSet[v] = struct{}{}
 	}
 	for block, v := range s.Recents {
@@ -328,11 +328,9 @@ func parseValidators(validatorsBytes []byte) ([]common.Address, error) {
 		return nil, errors.New("invalid validators bytes")
 	}
 	n := len(validatorsBytes) / validatorBytesLength
-	result := make([]common.Address, n)
+	result := make([]common.Address, 0, n)
 	for i := 0; i < n; i++ {
-		address := make([]byte, validatorBytesLength)
-		copy(address, validatorsBytes[i*validatorBytesLength:(i+1)*validatorBytesLength])
-		result[i] = common.BytesToAddress(address)
+		result = append(result, common.BytesToAddress(validatorsBytes[i*validatorBytesLength:(i+1)*validatorBytesLength]))
 	}
 	return result, nil
 }
