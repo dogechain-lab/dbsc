@@ -501,7 +501,8 @@ func (d *Drab) verifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	for seen, recent := range snap.Recents {
 		if recent == validator {
 			// Validator is among recents, only fail if the current block doesn't shift it out
-			if limit := uint64(snap.blockLimit()); seen > number-limit {
+			if limit := uint64(snap.blockLimit()); seen+limit > number {
+				log.Debug("verify validator found sealed recently", "seen", seen, "limit", limit, "number", number)
 				return errRecentlySigned
 			}
 		}
@@ -568,7 +569,8 @@ func (d *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 				return nil, err
 			}
 
-			log.Info("Stored checkpoint snapshot to disk", "number", number, "hash", hash)
+			log.Info("Stored hawaii hardfork checkpoint snapshot to disk",
+				"number", number, "hash", hash, "validators", len(extra.Validators), "recents", len(snap.Recents))
 			break
 		}
 
@@ -626,16 +628,16 @@ func (d *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 		return nil, fmt.Errorf("unknown error while retrieving snapshot at block number %v", number)
 	}
 
-	// Previous snapshot found, apply any pending headers on top of it
-	for i := 0; i < len(headers)/2; i++ {
-		headers[i], headers[len(headers)-1-i] = headers[len(headers)-1-i], headers[i]
-	}
+	// Previous snapshot found, reverse header to ascending order
+	reverse(headers)
 
+	// Apply headers recently to get current snapshot
 	snap, err := snap.apply(headers, chain, parents, d.chainConfig.ChainID)
 	if err != nil {
 		return nil, err
 	}
 	d.recentSnaps.Add(snap.Hash, snap)
+	log.Debug("snap after applying headers", "number", number, "hash", snap.Hash, "validators", len(snap.Validators), "limit", snap.blockLimit(), "recents", snap.Recents)
 
 	// If we've generated a new checkpoint snapshot, save to disk
 	if snap.Number%checkpointInterval == 0 && len(headers) > 0 {
@@ -645,6 +647,12 @@ func (d *Drab) snapshot(chain consensus.ChainHeaderReader, number uint64, hash c
 		log.Trace("Stored snapshot to disk", "number", snap.Number, "hash", snap.Hash)
 	}
 	return snap, err
+}
+
+func reverse[S ~[]E, E any](s S) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
 }
 
 // VerifyUncles implements consensus.Engine, always returning an error for any
@@ -934,8 +942,8 @@ func (d *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 	for seen, recent := range snap.Recents {
 		if recent == val {
 			// Signer is among recents, only wait if the current block doesn't shift it out
-			if limit := uint64(snap.blockLimit()); number < limit || seen > number-limit {
-				log.Info("Signed recently, must wait for others")
+			if limit := uint64(snap.blockLimit()); number < limit || seen+limit > number {
+				log.Info("Sealing found signed recently, must wait for others", "seen", seen, "limit", limit, "number", number)
 				return nil
 			}
 		}

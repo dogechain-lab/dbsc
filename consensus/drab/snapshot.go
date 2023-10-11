@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -201,6 +202,7 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainHeaderRea
 		// should not sign recently for fairness
 		for _, recent := range snap.Recents {
 			if recent == validator {
+				log.Debug("apply snapshot found validator sealed recently", "recent", snap.Recents)
 				return nil, errRecentlySigned
 			}
 		}
