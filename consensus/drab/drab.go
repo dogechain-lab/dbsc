@@ -44,7 +44,7 @@ const (
 	inMemorySnapshots  = 128  // Number of recent snapshots to keep in memory
 	inMemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	checkpointInterval = 128            // Number of blocks after which to save the snapshot to the database
+	checkpointInterval = 1024           // Number of blocks after which to save the snapshot to the database
 	defaultEpochLength = uint64(100000) // Default number of blocks of checkpoint to update validatorSet from contract
 	defaultBlockTime   = uint64(2)      // Default seconds between blocks
 
