@@ -306,6 +306,14 @@ func (b *LesApiBackend) RPCTxFeeCap() float64 {
 	return b.eth.config.RPCTxFeeCap
 }
 
+func (b *LesApiBackend) SkipBloomFilter(num *big.Int) bool {
+	cfg := b.eth.chainConfig
+	if cfg == nil {
+		return false
+	}
+	return cfg.IsIBFT(num) && !cfg.IsHawaii(num)
+}
+
 func (b *LesApiBackend) BloomStatus() (uint64, uint64) {
 	if b.eth.bloomIndexer == nil {
 		return 0, 0

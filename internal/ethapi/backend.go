@@ -87,6 +87,7 @@ type Backend interface {
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
 
 	// Filter API
+	SkipBloomFilter(*big.Int) bool
 	BloomStatus() (uint64, uint64)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)

@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"sort"
 
@@ -32,6 +33,25 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+// dogechain specific compatible
+var (
+	// Hawaii hard fork block number
+	DC_BLOCK_END_NUMBER int64 = -1
+)
+
+func DCBlockHeaderRange(number uint64) bool {
+	// overflow check
+	if number > uint64(math.MaxInt64) {
+		return false
+	}
+
+	if int64(number) <= DC_BLOCK_END_NUMBER {
+		return true
+	}
+
+	return false
+}
 
 // ReadCanonicalHash retrieves the hash assigned to a canonical block number.
 func ReadCanonicalHash(db ethdb.Reader, number uint64) common.Hash {
@@ -329,7 +349,7 @@ func ReadHeaderRange(db ethdb.Reader, number uint64, count uint64) []rlp.RawValu
 	return rlpHeaders
 }
 
-// ReadHeaderRLP retrieves a block header in its raw RLP database encoding.
+// ReadHeaderRLP retrieves a block header in its raw RLP database encoding. no check hash equality
 func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValue {
 	var data []byte
 	db.ReadAncients(func(reader ethdb.AncientReader) error {
@@ -337,9 +357,12 @@ func ReadHeaderRLP(db ethdb.Reader, hash common.Hash, number uint64) rlp.RawValu
 		// comparison is necessary since ancient database only maintains
 		// the canonical data.
 		data, _ = reader.Ancient(freezerHeaderTable, number)
-		if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
+		if DCBlockHeaderRange(number) && len(data) > 0 {
+			return nil
+		} else if len(data) > 0 && crypto.Keccak256Hash(data) == hash {
 			return nil
 		}
+
 		// If not, try reading from leveldb
 		data, _ = db.Get(headerKey(number, hash))
 		return nil
@@ -369,6 +392,12 @@ func ReadHeader(db ethdb.Reader, hash common.Hash, number uint64) *types.Header 
 		log.Error("Invalid block header RLP", "hash", hash, "err", err)
 		return nil
 	}
+	// check hash equality
+	if header.Hash() != hash {
+		log.Error("hash mismatch", "hash", hash, "header hash", header.Hash())
+		return nil
+	}
+
 	return header
 }
 

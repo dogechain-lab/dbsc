@@ -168,7 +168,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	var realGenesisHash common.Hash
 	defer func() {
 		if realGenesisHash != (common.Hash{}) {
-			// Never mind whether it is ibft or parlia, set both genesis hash.
+			// Never mind its consensus, set both genesis hash.
 			dccontracts.GenesisHash = realGenesisHash
 			systemcontracts.GenesisHash = realGenesisHash
 		}

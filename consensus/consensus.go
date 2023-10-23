@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -29,6 +30,7 @@ import (
 )
 
 var (
+	// use this for caching system fee reward
 	SystemAddress = common.HexToAddress("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE")
 )
 
@@ -148,4 +150,28 @@ type PoSA interface {
 	EnoughDistance(chain ChainReader, header *types.Header) bool
 	IsLocalBlock(header *types.Header) bool
 	AllowLightProcess(chain ChainReader, currentHeader *types.Header) bool
+}
+
+type ExecutionResult interface {
+	UsedGas() uint64
+	ReturnData() []byte
+	Error() error
+}
+
+type DcTxnArgs struct {
+	From     *common.Address
+	To       *common.Address
+	Gas      *hexutil.Uint64
+	GasPrice *hexutil.Big
+	Value    *hexutil.Big
+	Nonce    *hexutil.Uint64
+	Data     *hexutil.Bytes
+	Input    *hexutil.Bytes
+}
+
+type DC interface {
+	Engine
+
+	DoCall(tx *DcTxnArgs, header *types.Header, globalGasCap uint64) (ExecutionResult, error)
+	Process(block *types.Block, statedb *state.StateDB) (*state.StateDB, types.Receipts, []*types.Log, uint64, error)
 }

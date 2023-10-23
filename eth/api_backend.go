@@ -96,6 +96,14 @@ func (b *EthAPIBackend) HeaderByHash(ctx context.Context, hash common.Hash) (*ty
 	return b.eth.blockchain.GetHeaderByHash(hash), nil
 }
 
+func (b *EthAPIBackend) SkipBloomFilter(num *big.Int) bool {
+	cfg := b.eth.APIBackend.ChainConfig()
+	if cfg == nil {
+		return false
+	}
+	return cfg.IsIBFT(num) && !cfg.IsHawaii(num)
+}
+
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	// Pending block is only known by the miner
 	if number == rpc.PendingBlockNumber {

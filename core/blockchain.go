@@ -73,6 +73,18 @@ var (
 	blockValidationTimer = metrics.NewRegisteredTimer("chain/validation", nil)
 	blockExecutionTimer  = metrics.NewRegisteredTimer("chain/execution", nil)
 	blockWriteTimer      = metrics.NewRegisteredTimer("chain/write", nil)
+	// dc chain
+	blockDCProcessBlockTimer  = metrics.NewRegisteredTimer("chain/dc/process", nil)
+	blockDCVerificationTimer  = metrics.NewRegisteredTimer("chain/dc/verification", nil)
+	blockDCWriteBlockTimer    = metrics.NewRegisteredTimer("chain/dc/writes", nil)
+	blockDCFinaliseStateTimer = metrics.NewRegisteredTimer("chain/dc/finalize", nil)
+	blockDCGetReceiptsTimer   = metrics.NewRegisteredTimer("chain/dc/receipts", nil)
+	blockDCCommitHooksTimer   = metrics.NewRegisteredTimer("chain/dc/hook", nil)
+	blockDCGetObjectsTimer    = metrics.NewRegisteredTimer("chain/dc/objects/reads", nil)
+	blockDCSetObjectsTimer    = metrics.NewRegisteredTimer("chain/dc/objects/writes", nil)
+	blockDCSetStoragesTimer   = metrics.NewRegisteredTimer("chain/dc/storages/writes", nil)
+	blockDCObjectCounter      = metrics.NewRegisteredCounter("chain/dc/objects/count", nil)
+	blockDCStorageCounter     = metrics.NewRegisteredCounter("chain/dc/storages/count", nil)
 
 	blockReorgMeter         = metrics.NewRegisteredMeter("chain/reorg/executes", nil)
 	blockReorgAddMeter      = metrics.NewRegisteredMeter("chain/reorg/add", nil)
@@ -523,20 +535,6 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
 }
 
-func (bc *BlockChain) cacheReceipts(hash common.Hash, receipts types.Receipts) {
-	// TODO, This is a hot fix for the block hash of logs is `0x0000000000000000000000000000000000000000000000000000000000000000` for system tx
-	// Please check details in https://github.com/binance-chain/bsc/issues/443
-	// This is a temporary fix, the official fix should be a hard fork.
-	const possibleSystemReceipts = 3 // One slash tx, two reward distribute txs.
-	numOfReceipts := len(receipts)
-	for i := numOfReceipts - 1; i >= 0 && i >= numOfReceipts-possibleSystemReceipts; i-- {
-		for j := 0; j < len(receipts[i].Logs); j++ {
-			receipts[i].Logs[j].BlockHash = hash
-		}
-	}
-	bc.receiptsCache.Add(hash, receipts)
-}
-
 func (bc *BlockChain) cacheDiffLayer(diffLayer *types.DiffLayer, diffLayerCh chan struct{}) {
 	// The difflayer in the system is stored by the map structure,
 	// so it will be out of order.
@@ -570,10 +568,6 @@ func (bc *BlockChain) cacheDiffLayer(diffLayer *types.DiffLayer, diffLayerCh cha
 		// push to priority queue before persisting
 		bc.diffQueueBuffer <- diffLayer
 	}
-}
-
-func (bc *BlockChain) cacheBlock(hash common.Hash, block *types.Block) {
-	bc.blockCache.Add(hash, block)
 }
 
 // empty returns an indicator whether the blockchain is empty.
@@ -1894,35 +1888,50 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		}
 		bc.updateHighestVerifiedHeader(block.Header())
 
-		// Enable prefetching to pull in trie node paths while processing transactions
-		statedb.StartPrefetcher("chain")
-		interruptCh := make(chan struct{})
-		// For diff sync, it may fallback to full sync, so we still do prefetch
-		if len(block.Transactions()) >= prefetchTxNumber {
-			// do Prefetch in a separate goroutine to avoid blocking the critical path
-
-			// 1.do state prefetch for snapshot cache
-			throwaway := statedb.CopyDoPrefetch()
-			go bc.prefetcher.Prefetch(block, throwaway, &bc.vmConfig, interruptCh)
-
-			// 2.do trie prefetch for MPT trie node cache
-			// it is for the big state trie tree, prefetch based on transaction's From/To address.
-			// trie prefetcher is thread safe now, ok to prefetch in a separate routine
-			go throwaway.TriePrefetchInAdvance(block, signer)
-		}
-
-		//Process block using the parent state as reference point
 		substart := time.Now()
-		if bc.pipeCommit {
-			statedb.EnablePipeCommit()
-		}
-		statedb.SetExpectedStateRoot(block.Root())
-		statedb, receipts, logs, usedGas, err := bc.processor.Process(block, statedb, bc.vmConfig)
-		close(interruptCh) // state prefetch can be stopped
-		if err != nil {
-			bc.reportBlock(block, receipts, err)
-			statedb.StopPrefetcher()
-			return it.index, err
+		var (
+			receipts []*types.Receipt
+			logs     []*types.Log
+			usedGas  uint64
+		)
+		// if engine is DC, we don't need to do prefetch
+		if _, ok := bc.engine.(consensus.DC); ok {
+			statedb.SetExpectedStateRoot(block.Root())
+			statedb, receipts, logs, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
+			if err != nil {
+				bc.reportBlock(block, receipts, err)
+				return it.index, err
+			}
+		} else {
+			// Enable prefetching to pull in trie node paths while processing transactions
+			statedb.StartPrefetcher("chain")
+			interruptCh := make(chan struct{})
+			// For diff sync, it may fallback to full sync, so we still do prefetch
+			if len(block.Transactions()) >= prefetchTxNumber {
+				// do Prefetch in a separate goroutine to avoid blocking the critical path
+
+				// 1.do state prefetch for snapshot cache
+				throwaway := statedb.CopyDoPrefetch()
+				go bc.prefetcher.Prefetch(block, throwaway, &bc.vmConfig, interruptCh)
+
+				// 2.do trie prefetch for MPT trie node cache
+				// it is for the big state trie tree, prefetch based on transaction's From/To address.
+				// trie prefetcher is thread safe now, ok to prefetch in a separate routine
+				go throwaway.TriePrefetchInAdvance(block, signer)
+			}
+
+			//Process block using the parent state as reference point
+			if bc.pipeCommit {
+				statedb.EnablePipeCommit()
+			}
+			statedb.SetExpectedStateRoot(block.Root())
+			statedb, receipts, logs, usedGas, err = bc.processor.Process(block, statedb, bc.vmConfig)
+			close(interruptCh) // state prefetch can be stopped
+			if err != nil {
+				bc.reportBlock(block, receipts, err)
+				statedb.StopPrefetcher()
+				return it.index, err
+			}
 		}
 		// Update the metrics touched during block processing
 		accountReadTimer.Update(statedb.AccountReads)                 // Account reads are complete, we can mark them
@@ -1931,6 +1940,20 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 		storageUpdateTimer.Update(statedb.StorageUpdates)             // Storage updates are complete, we can mark them
 		snapshotAccountReadTimer.Update(statedb.SnapshotAccountReads) // Account reads are complete, we can mark them
 		snapshotStorageReadTimer.Update(statedb.SnapshotStorageReads) // Storage reads are complete, we can mark them
+		// Update the DC metrics touched during DC block processing
+		if _, ok := bc.engine.(consensus.DC); ok {
+			blockDCProcessBlockTimer.Update(statedb.DCProcessBlock)
+			blockDCVerificationTimer.Update(statedb.DCVerifications)
+			blockDCWriteBlockTimer.Update(statedb.DCWriteBlocks)
+			blockDCFinaliseStateTimer.Update(statedb.DCFinaliseStates)
+			blockDCGetReceiptsTimer.Update(statedb.DCGetReceipts)
+			blockDCCommitHooksTimer.Update(statedb.DCCommitHooks)
+			blockDCGetObjectsTimer.Update(statedb.DCGetObjects)
+			blockDCSetObjectsTimer.Update(statedb.DCSetObjects)
+			blockDCSetStoragesTimer.Update(statedb.DCSetStorages)
+			blockDCObjectCounter.Inc(int64(statedb.DCObjects))
+			blockDCStorageCounter.Inc(int64(statedb.DCStorages))
+		}
 
 		blockExecutionTimer.Update(time.Since(substart))
 
@@ -1944,8 +1967,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 				return it.index, err
 			}
 		}
-		bc.cacheReceipts(block.Hash(), receipts)
-		bc.cacheBlock(block.Hash(), block)
+
 		proctime := time.Since(start)
 
 		// Update the metrics touched during block validation
@@ -2983,6 +3005,11 @@ func (bc *BlockChain) TriesInMemory() uint64 { return bc.triesInMemory }
 
 // Options
 func EnableLightProcessor(bc *BlockChain) (*BlockChain, error) {
+	if _, ok := bc.engine.(consensus.DC); ok {
+		// light processor is not supported in Dogechain data
+		return bc, nil
+	}
+
 	bc.processor = NewLightStateProcessor(bc.Config(), bc, bc.engine)
 	return bc, nil
 }

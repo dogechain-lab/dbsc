@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
-	"github.com/ethereum/go-ethereum/consensus/ibft"
+	"github.com/ethereum/go-ethereum/consensus/drab"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
@@ -176,7 +176,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		log.Info("Unprotected transactions allowed")
 	}
 	ethAPI := ethapi.NewPublicBlockChainAPI(eth.APIBackend)
-	eth.engine = ethconfig.CreateConsensusEngine(stack, chainConfig, &ethashConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, ethAPI, genesisHash)
+	eth.engine, err = ethconfig.CreateConsensusEngine(stack, chainConfig, &ethashConfig, config.Miner.Notify, config.Miner.Noverify, chainDb, ethAPI, genesisHash)
+	if err != nil {
+		return nil, err
+	}
 
 	bcVersion := rawdb.ReadDatabaseVersion(chainDb)
 	var dbVer = "<nil>"
@@ -514,8 +517,8 @@ func (s *Ethereum) StartMining(threads int) error {
 		}
 
 		// Different pos(a) consensus
-		if ibft, ok := s.engine.(*ibft.IBFT); ok {
-			ibft.Authorize(eb, wallet.SignData, wallet.SignTx)
+		if drab, ok := s.engine.(*drab.Drab); ok {
+			drab.Authorize(eb, wallet.SignData, wallet.SignTx)
 		} else if parlia, ok := s.engine.(*parlia.Parlia); ok {
 			parlia.Authorize(eb, wallet.SignData, wallet.SignTx)
 		} else {

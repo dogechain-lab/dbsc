@@ -24,6 +24,8 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/ethereum/go-ethereum/common"
+
+	dc "github.com/dogechain-lab/dogechain/chain"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -193,9 +195,9 @@ var (
 		PortlandBlock:       big.NewInt(1981991),
 		DetroitBlock:        big.NewInt(4490834),
 
-		IBFT: &IBFTConfig{
+		Drab: &DrabConfig{
+			BlockTime: 2,
 			EpochSize: 7200,
-			Type:      IBFTPoS,
 		},
 	}
 
@@ -214,9 +216,9 @@ var (
 		PortlandBlock:       big.NewInt(1065956),
 		DetroitBlock:        big.NewInt(2661202),
 
-		IBFT: &IBFTConfig{
+		Drab: &DrabConfig{
+			BlockTime: 2,
 			EpochSize: 7200,
-			Type:      IBFTPoS,
 		},
 	}
 
@@ -406,7 +408,8 @@ type ChainConfig struct {
 	Ethash *EthashConfig `json:"ethash,omitempty" toml:",omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty" toml:",omitempty"`
 	Parlia *ParliaConfig `json:"parlia,omitempty" toml:",omitempty"`
-	IBFT   *IBFTConfig   `json:"ibft,omitempty" toml:",omitempty"`
+	Doge   *DogeConfig   `json:"doge,omitempty" toml:",omitempty"`
+	Drab   *DrabConfig   `json:"drab,omitempty" toml:",omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -428,22 +431,26 @@ func (c *CliqueConfig) String() string {
 	return "clique"
 }
 
+type DogeConfig struct {
+	Genesis *dc.Genesis `json:"genesis"`
+	Params  *dc.Params  `json:"params"`
+}
+
+func (c *DogeConfig) String() string {
+	return "doge"
+}
+
 type IBFTType string
 
 const (
 	IBFTPoS IBFTType = "PoS"
-	IBFTPoA IBFTType = "PoA"
+	// IBFTPoA IBFTType = "PoA" // not supported any more
 )
 
 // ParliaConfig is the consensus engine configs for istanbul-byzantium-fault-tolarance based sealing.
-type IBFTConfig struct {
-	EpochSize uint64   `json:"epochSize"`
-	Type      IBFTType `json:"type"`
-}
-
-// String implements the stringer interface, returning the consensus engine details.
-func (c *IBFTConfig) String() string {
-	return "ibft"
+type DrabConfig struct {
+	BlockTime uint64 `json:"blockTime"`
+	EpochSize uint64 `json:"epochSize"`
 }
 
 // ParliaConfig is the consensus engine configs for proof-of-staked-authority based sealing.
@@ -461,14 +468,16 @@ func (b *ParliaConfig) String() string {
 func (c *ChainConfig) String() string {
 	var engine interface{}
 	switch {
+	case c.Drab != nil:
+		engine = c.Drab
+	case c.Doge != nil:
+		engine = c.Doge
 	case c.Ethash != nil:
 		engine = c.Ethash
 	case c.Clique != nil:
 		engine = c.Clique
 	case c.Parlia != nil:
 		engine = c.Parlia
-	case c.IBFT != nil:
-		engine = c.IBFT
 	default:
 		engine = "unknown"
 	}
@@ -619,6 +628,11 @@ func (c *ChainConfig) IsBerlin(num *big.Int) bool {
 // IsLondon returns whether num is either equal to the London fork block or greater.
 func (c *ChainConfig) IsLondon(num *big.Int) bool {
 	return isForked(c.LondonBlock, num)
+}
+
+// IsOnLondon returns whether num is equal to the london fork block
+func (c *ChainConfig) IsOnLondon(num *big.Int) bool {
+	return configNumEqual(c.LondonBlock, num)
 }
 
 // IsArrowGlacier returns whether num is either equal to the Arrow Glacier (EIP-4345) fork block or greater.
@@ -838,6 +852,21 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, head *big.Int) *Confi
 	}
 	if isForkIncompatible(c.PlanckBlock, newcfg.PlanckBlock, head) {
 		return newCompatError("planck fork block", c.PlanckBlock, newcfg.PlanckBlock)
+	}
+	if isForkIncompatible(c.IBFTBlock, newcfg.IBFTBlock, head) {
+		return newCompatError("IBFT fork block", c.IBFTBlock, newcfg.IBFTBlock)
+	}
+	if isForkIncompatible(c.PreportlandBlock, newcfg.PreportlandBlock, head) {
+		return newCompatError("pre-portland fork block", c.PreportlandBlock, newcfg.PreportlandBlock)
+	}
+	if isForkIncompatible(c.PortlandBlock, newcfg.PortlandBlock, head) {
+		return newCompatError("portland fork block", c.PortlandBlock, newcfg.PortlandBlock)
+	}
+	if isForkIncompatible(c.DetroitBlock, newcfg.DetroitBlock, head) {
+		return newCompatError("detroit fork block", c.DetroitBlock, newcfg.DetroitBlock)
+	}
+	if isForkIncompatible(c.HawaiiBlock, newcfg.HawaiiBlock, head) {
+		return newCompatError("hawaii fork block", c.HawaiiBlock, newcfg.HawaiiBlock)
 	}
 	return nil
 }

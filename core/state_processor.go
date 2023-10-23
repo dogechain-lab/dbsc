@@ -87,6 +87,11 @@ func (p *LightStateProcessor) Process(block *types.Block, statedb *state.StateDB
 	if posa, ok := p.engine.(consensus.PoSA); ok {
 		allowLightProcess = posa.AllowLightProcess(p.bc, block.Header())
 	}
+
+	if _, ok := p.engine.(consensus.DC); ok {
+		allowLightProcess = false
+	}
+
 	// random fallback to full process
 	if allowLightProcess && block.NumberU64()%fullProcessCheck != uint64(p.check) && len(block.Transactions()) != 0 {
 		var pid string
@@ -388,13 +393,18 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
 
+	// dogechain legacy block
+	if dc, ok := p.engine.(consensus.DC); ok {
+		return dc.Process(block, statedb)
+	}
+
 	var receipts = make([]*types.Receipt, 0)
 	// Mutate the block and state according to any hard-fork specs
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
 	// Handle upgrade build-in system contract code
-	if p.config.IsIBFT(block.Number()) { // ibft
+	if p.config.IsIBFT(block.Number()) { // dbsc
 		dccontracts.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)
 	} else { // parlia by default
 		systemcontracts.UpgradeBuildInSystemContract(p.config, block.Number(), statedb)

@@ -1,4 +1,4 @@
-package ibft
+package drab
 
 import (
 	"errors"
@@ -22,7 +22,19 @@ var (
 	_vaultContractAddr  = common.HexToAddress(dccontracts.DCVaultContract)
 )
 
-func (p *IBFT) handleBridgeLog(log *types.Log, state *state.StateDB) error {
+func (d *Drab) handleBridgeEvents(state *state.StateDB, receipts []*types.Receipt) error {
+	// Handle bridge logs
+	for _, receipt := range receipts {
+		for _, rlog := range receipt.Logs {
+			if err := d.handleBridgeLog(rlog, state); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (d *Drab) handleBridgeLog(log *types.Log, state *state.StateDB) error {
 	// Ensures it is a bridge log
 	if log.Address != _bridgeContractAddr {
 		return nil
@@ -31,23 +43,24 @@ func (p *IBFT) handleBridgeLog(log *types.Log, state *state.StateDB) error {
 	if len(log.Topics) == 0 {
 		return nil
 	}
-	// get event from topic
-	ev, err := p.bridgeABI.EventByID(log.Topics[0])
+	// Get event from topic.
+	// The ABI should be backward compatible
+	ev, err := d.bridgeABI.EventByID(log.Topics[0])
 	if err != nil {
 		return err
 	}
 
-	// use rawname for abi content matching
+	// Use rawname for bridge event matching
 	switch ev.RawName {
 	case _eventDeposited:
-		deposited, err := parseDepositedEvent(p.bridgeABI, ev, log)
+		deposited, err := parseDepositedEvent(d.bridgeABI, ev, log)
 		if err != nil {
 			return err
 		}
 		// deposit from bridge
 		state.AddBalance(deposited.Receiver, deposited.Amount)
 	case _eventWithdrawn:
-		withdrawn, err := parseWithdrawnEvent(p.bridgeABI, ev, log)
+		withdrawn, err := parseWithdrawnEvent(d.bridgeABI, ev, log)
 		if err != nil {
 			return err
 		}
@@ -58,7 +71,7 @@ func (p *IBFT) handleBridgeLog(log *types.Log, state *state.StateDB) error {
 		// the fee goes to system Vault contract
 		state.AddBalance(_vaultContractAddr, withdrawn.Fee)
 	case _eventBurned:
-		burned, err := parseBurnedEvent(p.bridgeABI, ev, log)
+		burned, err := parseBurnedEvent(d.bridgeABI, ev, log)
 		if err != nil {
 			return err
 		}

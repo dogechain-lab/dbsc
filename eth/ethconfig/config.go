@@ -29,8 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
+	"github.com/ethereum/go-ethereum/consensus/dc"
+	"github.com/ethereum/go-ethereum/consensus/drab"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/consensus/ibft"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -88,7 +89,7 @@ var Defaults = Config{
 	DiffBlock:               uint64(86400),
 	Miner: miner.Config{
 		GasCeil:       8000000,
-		GasPrice:      big.NewInt(params.GWei),
+		GasPrice:      big.NewInt(250 * params.GWei),
 		Recommit:      3 * time.Second,
 		DelayLeftOver: 50 * time.Millisecond,
 	},
@@ -96,7 +97,7 @@ var Defaults = Config{
 	RPCGasCap:     50000000,
 	RPCEVMTimeout: 5 * time.Second,
 	GPO:           FullNodeGPO,
-	RPCTxFeeCap:   1, // 1 ether
+	RPCTxFeeCap:   0, // no cap limit
 }
 
 func init() {
@@ -246,14 +247,18 @@ type Config struct {
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.PublicBlockChainAPI, genesisHash common.Hash) consensus.Engine {
-	// ibft
-	if chainConfig.IBFT != nil {
-		return ibft.New(chainConfig, db, ee, genesisHash)
+func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.PublicBlockChainAPI, genesisHash common.Hash) (consensus.Engine, error) {
+	// drab
+	if chainConfig.Drab != nil {
+		return drab.New(chainConfig, db, ee, genesisHash), nil
+	}
+	// dc, original dogechain data
+	if chainConfig.Doge != nil {
+		return dc.New(chainConfig, stack.Config(), db, ee)
 	}
 	// parlia
 	if chainConfig.Parlia != nil {
-		return parlia.New(chainConfig, db, ee, genesisHash)
+		return parlia.New(chainConfig, db, ee, genesisHash), nil
 	}
 	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
@@ -282,5 +287,5 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 		}, notify, noverify)
 		engine.(*ethash.Ethash).SetThreads(-1) // Disable CPU mining
 	}
-	return beacon.New(engine)
+	return beacon.New(engine), nil
 }

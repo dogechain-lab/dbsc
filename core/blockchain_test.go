@@ -19,7 +19,6 @@ package core
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -898,7 +897,7 @@ func TestFastVsFullChains(t *testing.T) {
 		t.Fatalf("failed to insert receipt %d: %v", n, err)
 	}
 	// Freezer style fast import the chain.
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
@@ -994,7 +993,7 @@ func TestLightVsFastVsFullChainHeads(t *testing.T) {
 
 	// makeDb creates a db instance for testing.
 	makeDb := func() (ethdb.Database, func()) {
-		dir, err := ioutil.TempDir("", "")
+		dir, err := os.MkdirTemp("", "")
 		if err != nil {
 			t.Fatalf("failed to create temp freezer dir: %v", err)
 		}
@@ -1860,7 +1859,7 @@ func TestBlockchainRecovery(t *testing.T) {
 	blocks, receipts := GenerateChain(gspec.Config, genesis, ethash.NewFaker(), gendb, int(height), nil)
 
 	// Import the chain as a ancient-first node and ensure all pointers are updated
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
@@ -1932,7 +1931,7 @@ func TestInsertReceiptChainRollback(t *testing.T) {
 	}
 
 	// Set up a BlockChain that uses the ancient store.
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
@@ -2199,7 +2198,7 @@ func testInsertKnownChainData(t *testing.T, typ string) {
 		b.OffsetTime(-9) // A higher difficulty
 	})
 	// Import the shared chain and the original canonical one
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
@@ -2363,7 +2362,7 @@ func testInsertKnownChainDataWithMerging(t *testing.T, typ string, mergeHeight i
 	})
 
 	// Import the shared chain and the original canonical one
-	dir, err := ioutil.TempDir("", "")
+	dir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
@@ -2673,7 +2672,7 @@ func TestTransactionIndices(t *testing.T) {
 			}
 		}
 	}
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
@@ -2800,7 +2799,7 @@ func TestSkipStaleTxIndicesInSnapSync(t *testing.T) {
 		}
 	}
 
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}

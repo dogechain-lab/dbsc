@@ -14,11 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package ibft
+package dc
 
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"math/big"
 	"sort"
 
@@ -27,13 +29,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
 )
 
 // Snapshot is the state of the validatorSet at a given point.
 type Snapshot struct {
-	config       *params.IBFTConfig // Consensus engine parameters to fine tune behavior
+	epochSize    uint64
 	ethAPI       *ethapi.PublicBlockChainAPI
 	sigCache     *lru.ARCCache               // Cache of recent block signatures to speed up ecrecover
 	validatorSet map[common.Address]struct{} // validator set for quick query
@@ -47,7 +49,7 @@ type Snapshot struct {
 // method does not initialize the set of recent validators, so only ever use it for
 // the genesis block.
 func newSnapshot(
-	config *params.IBFTConfig,
+	epochSize uint64,
 	sigCache *lru.ARCCache,
 	number uint64,
 	hash common.Hash,
@@ -55,7 +57,7 @@ func newSnapshot(
 	ethAPI *ethapi.PublicBlockChainAPI,
 ) *Snapshot {
 	snap := &Snapshot{
-		config:       config,
+		epochSize:    epochSize,
 		ethAPI:       ethAPI,
 		sigCache:     sigCache,
 		validatorSet: make(map[common.Address]struct{}),
@@ -70,7 +72,7 @@ func newSnapshot(
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.IBFTConfig, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) {
+func loadSnapshot(epochSize uint64, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) {
 	blob, err := db.Get(append([]byte("ibft-"), hash[:]...))
 	if err != nil {
 		return nil, err
@@ -79,7 +81,7 @@ func loadSnapshot(config *params.IBFTConfig, sigCache *lru.ARCCache, db ethdb.Da
 	if err := json.Unmarshal(blob, snap); err != nil {
 		return nil, err
 	}
-	snap.config = config
+	snap.epochSize = epochSize
 	snap.sigCache = sigCache
 	snap.ethAPI = ethAPI
 	// reset cache
@@ -109,7 +111,7 @@ func (s *Snapshot) copyValidators() []common.Address {
 // copy creates a deep copy of the snapshot
 func (s *Snapshot) copy() *Snapshot {
 	cpy := &Snapshot{
-		config:       s.config,
+		epochSize:    s.epochSize,
 		ethAPI:       s.ethAPI,
 		sigCache:     s.sigCache,
 		validatorSet: make(map[common.Address]struct{}),
@@ -160,7 +162,7 @@ func (s *Snapshot) apply(headers []*types.Header, chain consensus.ChainHeaderRea
 			return nil, errUnauthorizedValidator
 		}
 		// change validator set
-		if number > 0 && number%s.config.EpochSize == 0 {
+		if number > 0 && number%s.epochSize == 0 {
 			checkpointHeader := FindAncientHeader(header, uint64(len(snap.Validators)/2), chain, parents)
 			if checkpointHeader == nil {
 				return nil, consensus.ErrUnknownAncestor
@@ -250,4 +252,101 @@ func FindAncientHeader(header *types.Header, ite uint64, chain consensus.ChainHe
 		}
 	}
 	return ancient
+}
+
+// snapshot retrieves the authorization snapshot at a given point in time.
+func (dc *DogeChain) snapshot(chain consensus.ChainHeaderReader, number uint64, hash common.Hash, parents []*types.Header) (*Snapshot, error) {
+	// Search for a snapshot in memory or on disk for checkpoints
+	var (
+		headers []*types.Header
+		snap    *Snapshot
+	)
+
+	for snap == nil {
+		// If an in-memory snapshot was found, use that
+		if s, ok := dc.recentSnaps.Get(hash); ok {
+			snap = s.(*Snapshot)
+			break
+		}
+
+		// If an on-disk checkpoint snapshot can be found, use that
+		if number%checkpointInterval == 0 {
+			if s, err := loadSnapshot(dc.epochSize, dc.signatures, dc.db, hash, dc.ethAPI); err == nil {
+				log.Trace("Loaded snapshot from disk", "number", number, "hash", hash)
+				snap = s
+				break
+			}
+		}
+
+		// If we're at the genesis, snapshot the initial state.
+		if number == 0 {
+			checkpoint := chain.GetHeaderByNumber(number)
+			if checkpoint != nil {
+				// get checkpoint data
+				hash := checkpoint.Hash()
+
+				if len(checkpoint.Extra) <= ExtraVanity {
+					return nil, errors.New("invalid extra-data for genesis block, check the genesis.json file")
+				}
+
+				// get validators from headers
+				extra, err := types.GetIbftExtra(checkpoint.Extra)
+				if err != nil {
+					return nil, err
+				}
+
+				// new snap shot
+				snap = newSnapshot(dc.epochSize, dc.signatures, number, hash, extra.Validators, dc.ethAPI)
+				if err := snap.store(dc.db); err != nil {
+					return nil, err
+				}
+				log.Info("Stored checkpoint snapshot to disk", "number", number, "hash", hash)
+				break
+			}
+		}
+
+		// No snapshot for this header, gather the header and move backward
+		var header *types.Header
+		if len(parents) > 0 {
+			// If we have explicit parents, pick from there (enforced)
+			header = parents[len(parents)-1]
+			if header.Hash() != hash || header.Number.Uint64() != number {
+				return nil, consensus.ErrUnknownAncestor
+			}
+			parents = parents[:len(parents)-1]
+		} else {
+			// No explicit parents (or no more left), reach out to the database
+			header = chain.GetHeader(hash, number)
+			if header == nil {
+				return nil, consensus.ErrUnknownAncestor
+			}
+		}
+		headers = append(headers, header)
+		number, hash = number-1, header.ParentHash
+	}
+
+	// check if snapshot is nil
+	if snap == nil {
+		return nil, fmt.Errorf("unknown error while retrieving snapshot at block number %v", number)
+	}
+
+	// Previous snapshot found, apply any pending headers on top of it
+	for i := 0; i < len(headers)/2; i++ {
+		headers[i], headers[len(headers)-1-i] = headers[len(headers)-1-i], headers[i]
+	}
+
+	snap, err := snap.apply(headers, chain, parents, dc.chainConfig.ChainID)
+	if err != nil {
+		return nil, err
+	}
+	dc.recentSnaps.Add(snap.Hash, snap)
+
+	// If we've generated a new checkpoint snapshot, save to disk
+	if snap.Number%checkpointInterval == 0 && len(headers) > 0 {
+		if err = snap.store(dc.db); err != nil {
+			return nil, err
+		}
+		log.Trace("Stored snapshot to disk", "number", snap.Number, "hash", snap.Hash)
+	}
+	return snap, err
 }

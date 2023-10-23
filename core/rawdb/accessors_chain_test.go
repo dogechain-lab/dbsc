@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
@@ -435,7 +434,7 @@ func checkReceiptsRLP(have, want types.Receipts) error {
 
 func TestAncientStorage(t *testing.T) {
 	// Freezer style fast import the chain.
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}
@@ -577,7 +576,7 @@ func TestHashesInRange(t *testing.T) {
 // This measures the write speed of the WriteAncientBlocks operation.
 func BenchmarkWriteAncientBlocks(b *testing.B) {
 	// Open freezer database.
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		b.Fatalf("failed to create temp freezer dir: %v", err)
 	}
@@ -860,7 +859,7 @@ func TestDeriveLogFields(t *testing.T) {
 
 func BenchmarkDecodeRLPLogs(b *testing.B) {
 	// Encoded receipts from block 0x14ee094309fbe8f70b65f45ebcc08fb33f126942d97464aad5eb91cfd1e2d269
-	buf, err := ioutil.ReadFile("testdata/stored_receipts.bin")
+	buf, err := os.ReadFile("testdata/stored_receipts.bin")
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -886,7 +885,7 @@ func BenchmarkDecodeRLPLogs(b *testing.B) {
 
 func TestHeadersRLPStorage(t *testing.T) {
 	// Have N headers in the freezer
-	frdir, err := ioutil.TempDir("", "")
+	frdir, err := os.MkdirTemp("", "")
 	if err != nil {
 		t.Fatalf("failed to create temp freezer dir: %v", err)
 	}

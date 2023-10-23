@@ -44,6 +44,15 @@ var (
 	_detroitUpgrade = make(map[string]*Upgrade)
 )
 
+var (
+	// for hawaii upgrade testing, the code hash is on detroit upgrade
+	_hawaiiContractHashes = map[string]common.Hash{
+		DCValidatorSetContract: common.HexToHash("0x7aaf439b5a0b4b1e58848486506dfd926917b27c96b4575db129d238f953ab16"),
+		DCBridgeContract:       common.HexToHash("0x9f6481ee665b7a3e887b9cd08ce336056496e9cac0118d23fdbe5ee06dd5c097"),
+		DCVaultContract:        common.HexToHash("0x21ffddf3b9496572e1deee783130caa55a19cd5443b83ef50ac75047f0a01754"),
+	}
+)
+
 func init() {
 	// pre-portland upgrade, only devnet support this hard fork
 	_testInt, _ := new(big.Int).SetString("55000000000000000000", 0)
@@ -107,6 +116,9 @@ func init() {
 	// network supports detroit upgrade
 	_detroitUpgrade[_mainNet] = _detroitUpgradeContent
 	_detroitUpgrade[_devNet] = _detroitUpgradeContent
+
+	// hawaii harkfork
+
 }
 
 func UpgradeBuildInSystemContract(config *params.ChainConfig, blockNumber *big.Int, statedb *state.StateDB) {
@@ -136,6 +148,15 @@ func UpgradeBuildInSystemContract(config *params.ChainConfig, blockNumber *big.I
 
 	if config.IsOnDetorit(blockNumber) {
 		applySystemContractUpgrade(_detroitUpgrade[network], blockNumber, statedb, logger)
+	}
+
+	// only works on test environments
+	if config.IsOnHawaii(blockNumber) {
+		got := statedb.GetCodeHash(common.HexToAddress(DCValidatorSetContract))
+		should := _hawaiiContractHashes[DCValidatorSetContract]
+		if got != should {
+			applySystemContractUpgrade(_detroitUpgrade[network], blockNumber, statedb, logger)
+		}
 	}
 }
 

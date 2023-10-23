@@ -53,10 +53,8 @@ func (evm *EVM) precompile(addr common.Address) (PrecompiledContract, bool) {
 	var precompiles map[common.Address]PrecompiledContract
 	switch {
 	// Top most chain rule
-	case evm.chainRules.IsIBFT:
-		// Since ibft genesis block, we'll use only berlin compatible
-		// precompiled contracts.
-		precompiles = PrecompiledContractsIBFT
+	case evm.chainRules.IsHawaii:
+		precompiles = PrecompiledContractsHawaii
 	case evm.chainRules.IsPlanck:
 		precompiles = PrecompiledContractsPlanck
 	case evm.chainRules.IsMoran:

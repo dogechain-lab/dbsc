@@ -23,7 +23,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/consensus/ibft"
+	"github.com/dogechain-lab/dogechain/consensus/ibft"
 	"github.com/ethereum/go-ethereum/core/dccontracts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -170,11 +170,13 @@ func genesisGen(c *cli.Context) error {
 		PreportlandBlock:    big.NewInt(1), // dogechain system contract upgrade
 		PortlandBlock:       big.NewInt(2),
 		DetroitBlock:        big.NewInt(3),
-		// TODO: Add hawaii hard fork
-		// HawaiiBlock:      big.NewInt(4),
-		IBFT: &params.IBFTConfig{
+		// enable together in hawaii fork
+		BerlinBlock: big.NewInt(4),
+		LondonBlock: big.NewInt(4),
+		NanoBlock:   big.NewInt(4), // blacklist
+		HawaiiBlock: big.NewInt(4),
+		Drab: &params.DrabConfig{
 			EpochSize: c.GlobalUint64(epochSizeFlag.Name),
-			Type:      params.IBFTPoS,
 		},
 	}
 
@@ -240,7 +242,7 @@ func genesisGen(c *cli.Context) error {
 		}
 	}
 
-	genesis.ExtraData = make([]byte, ibft.ExtraVanity)
+	genesis.ExtraData = make([]byte, ibft.IstanbulExtraVanity)
 	ibftExtra := &types.IBFTExtra{
 		Validators:    validatorsAddress,
 		Seal:          []byte{},

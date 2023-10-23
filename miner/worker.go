@@ -778,7 +778,9 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
-		if w.chain.Config().IsEuler(env.header.Number) {
+		if w.chain.Config().IsHawaii(env.header.Number) {
+			env.gasPool.SubGas(params.SystemTxsGas * 2)
+		} else if w.chain.Config().IsEuler(env.header.Number) {
 			env.gasPool.SubGas(params.SystemTxsGas * 3)
 		} else {
 			env.gasPool.SubGas(params.SystemTxsGas)
@@ -966,10 +968,6 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
 	if w.chainConfig.IsLondon(header.Number) {
 		header.BaseFee = misc.CalcBaseFee(w.chainConfig, parent.Header())
-		if !w.chainConfig.IsLondon(parent.Number()) {
-			parentGasLimit := parent.GasLimit() * params.ElasticityMultiplier
-			header.GasLimit = core.CalcGasLimit(parentGasLimit, w.config.GasCeil)
-		}
 	}
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {
@@ -986,7 +984,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	}
 
 	// Handle upgrade build-in system contract code
-	if w.chainConfig.IsIBFT(header.Number) { // ibft
+	if w.chainConfig.IsIBFT(header.Number) { // dbsc
 		dccontracts.UpgradeBuildInSystemContract(w.chainConfig, header.Number, env.state)
 	} else { // parlia by default
 		systemcontracts.UpgradeBuildInSystemContract(w.chainConfig, header.Number, env.state)

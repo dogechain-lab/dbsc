@@ -897,6 +897,91 @@ func (diff *StateOverride) Apply(state *state.StateDB) error {
 func DoCall(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, overrides *StateOverride, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {
 	defer func(start time.Time) { log.Debug("Executing EVM call finished", "runtime", time.Since(start)) }(time.Now())
 
+	// TODO: hard fork check
+	if dc, ok := b.Engine().(consensus.DC); ok {
+		header, err := b.HeaderByNumberOrHash(ctx, blockNrOrHash)
+		if err != nil {
+			return nil, err
+		}
+
+		if args.ChainID != nil {
+			var chainID = b.ChainConfig().ChainID
+			if args.ChainID.ToInt().Cmp(chainID) != 0 {
+				return nil, fmt.Errorf("invalid chain id %s, expected %s", args.ChainID.String(), chainID.String())
+			}
+		}
+
+		dcTxArgs := &consensus.DcTxnArgs{
+			From:     args.From,
+			To:       args.To,
+			Gas:      args.Gas,
+			GasPrice: args.GasPrice,
+			Value:    args.Value,
+			Nonce:    args.Nonce,
+			Data:     args.Data,
+			Input:    args.Input,
+		}
+
+		//// from dogechain/jsonrpc/eth_endpoint.go#L922
+		// set default values
+		var zeroUint64 = hexutil.Uint64(0)
+		if dcTxArgs.From == nil {
+			dcTxArgs.From = &(common.Address{})
+			dcTxArgs.Nonce = &zeroUint64
+		} else if dcTxArgs.Nonce == nil {
+			// get nonce from the pool
+			fromNomce, err := b.GetPoolNonce(ctx, *args.From)
+			if err != nil {
+				return nil, err
+			}
+
+			dcTxArgs.Nonce = (*hexutil.Uint64)(&fromNomce)
+		}
+
+		if dcTxArgs.Value == nil {
+			dcTxArgs.Value = (*hexutil.Big)(big.NewInt(0))
+		}
+
+		if dcTxArgs.GasPrice == nil {
+			dcTxArgs.GasPrice = (*hexutil.Big)(big.NewInt(0))
+		}
+
+		var input []byte
+		if dcTxArgs.Data != nil {
+			input = *dcTxArgs.Data
+		} else if dcTxArgs.Input != nil {
+			input = *dcTxArgs.Input
+		}
+
+		if dcTxArgs.To == nil {
+			if input == nil {
+				return nil, fmt.Errorf("contract creation without data provided")
+			}
+		}
+
+		if input == nil {
+			input = []byte{}
+		}
+
+		dcTxArgs.Input = (*hexutil.Bytes)(&input)
+
+		if dcTxArgs.Gas == nil {
+			gaslimit := hexutil.Uint64(header.GasLimit)
+			dcTxArgs.Gas = &gaslimit
+		}
+
+		result, err := dc.DoCall(dcTxArgs, header, globalGasCap)
+		if err != nil && result == nil {
+			return nil, err
+		}
+
+		return &core.ExecutionResult{
+			UsedGas:    result.UsedGas(),
+			ReturnData: result.ReturnData(),
+			Err:        result.Error(),
+		}, err
+	}
+
 	state, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
@@ -1070,6 +1155,9 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
 		args.Gas = (*hexutil.Uint64)(&gas)
+
+		fromNomce, _ := b.GetPoolNonce(ctx, *args.From) // from can't be nil
+		args.Nonce = (*hexutil.Uint64)(&fromNomce)
 
 		result, err := DoCall(ctx, b, args, blockNrOrHash, nil, 0, gasCap)
 		if err != nil {
