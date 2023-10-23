@@ -76,7 +76,7 @@ jobs:
         with:
           name: macos
           path: ./build/bin/geth
-      
+
       - name: Upload Windows Build
         uses: actions/upload-artifact@v3
         if: matrix.os == 'windows-latest'
@@ -90,7 +90,7 @@ jobs:
         with:
           name: arm5
           path: ./build/bin/geth-linux-arm-5
-      
+
       - name: Upload ARM-6 Build
         uses: actions/upload-artifact@v3
         if: matrix.os == 'ubuntu-latest'
@@ -132,50 +132,48 @@ jobs:
         with:
           name: linux
           path: ./linux
-      
+
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
           name: macos
           path: ./macos
-      
+
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
           name: windows
           path: ./windows
-      
+
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
           name: arm5
           path: ./arm5
-      
+
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
           name: arm6
           path: ./arm6
-      
+
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
           name: arm7
           path: ./arm7
-      
+
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
           name: arm64
           path: ./arm64
-      
+
       - name: Download Config File
         run: |
           . ./.github/release.env
           echo "mainnet.zip url: $MAINNET_FILE_URL"
-          echo "testnet.zip url: $TESTNET_FILE_URL"
           curl -L $MAINNET_FILE_URL -o ./mainnet.zip
-          curl -L $TESTNET_FILE_URL -o ./testnet.zip
       # ==============================
       #       Create release
       # ==============================
@@ -207,7 +205,6 @@ jobs:
           prerelease: false
           files: |
             ./mainnet.zip
-            ./testnet.zip
             ./linux/geth_linux
             ./macos/geth_macos
             ./windows/geth_windows.exe
