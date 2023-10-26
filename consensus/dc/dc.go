@@ -55,7 +55,7 @@ type DogeChain struct {
 	signatures  *lru.ARCCache // Signatures of recent blocks to speed up mining
 
 	db     ethdb.Database
-	ethAPI *ethapi.PublicBlockChainAPI
+	ethAPI *ethapi.BlockChainAPI
 
 	closeFlag atomic.Bool
 	lock      sync.Mutex
@@ -78,7 +78,7 @@ func New(
 	chainConfig *params.ChainConfig,
 	config *node.Config,
 	db ethdb.Database,
-	ethAPI *ethapi.PublicBlockChainAPI,
+	ethAPI *ethapi.BlockChainAPI,
 ) (*DogeChain, error) {
 	// hack dogechain header rlp decode error
 	if chainConfig.HawaiiBlock == nil ||

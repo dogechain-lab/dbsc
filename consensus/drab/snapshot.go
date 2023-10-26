@@ -42,7 +42,7 @@ const (
 // Snapshot is the state of the validatorSet at a given point.
 type Snapshot struct {
 	config       *params.DrabConfig // Consensus engine parameters to fine tune behavior
-	ethAPI       *ethapi.PublicBlockChainAPI
+	ethAPI       *ethapi.BlockChainAPI
 	sigCache     *lru.ARCCache               // Cache of recent block signatures to speed up ecrecover
 	validatorSet map[common.Address]struct{} // validator set for quick query
 
@@ -62,7 +62,7 @@ func newSnapshot(
 	number uint64,
 	hash common.Hash,
 	validators []common.Address,
-	ethAPI *ethapi.PublicBlockChainAPI,
+	ethAPI *ethapi.BlockChainAPI,
 ) *Snapshot {
 	snap := &Snapshot{
 		config:           config,
@@ -82,7 +82,7 @@ func newSnapshot(
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.DrabConfig, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) {
+func loadSnapshot(config *params.DrabConfig, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.BlockChainAPI) (*Snapshot, error) {
 	blob, err := db.Get(append([]byte(snapshotKeyPrefix), hash[:]...))
 	if err != nil {
 		return nil, err

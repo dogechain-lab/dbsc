@@ -36,7 +36,7 @@ import (
 // Snapshot is the state of the validatorSet at a given point.
 type Snapshot struct {
 	epochSize    uint64
-	ethAPI       *ethapi.PublicBlockChainAPI
+	ethAPI       *ethapi.BlockChainAPI
 	sigCache     *lru.ARCCache               // Cache of recent block signatures to speed up ecrecover
 	validatorSet map[common.Address]struct{} // validator set for quick query
 
@@ -54,7 +54,7 @@ func newSnapshot(
 	number uint64,
 	hash common.Hash,
 	validators []common.Address,
-	ethAPI *ethapi.PublicBlockChainAPI,
+	ethAPI *ethapi.BlockChainAPI,
 ) *Snapshot {
 	snap := &Snapshot{
 		epochSize:    epochSize,
@@ -72,7 +72,7 @@ func newSnapshot(
 }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(epochSize uint64, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) {
+func loadSnapshot(epochSize uint64, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.BlockChainAPI) (*Snapshot, error) {
 	blob, err := db.Get(append([]byte("ibft-"), hash[:]...))
 	if err != nil {
 		return nil, err

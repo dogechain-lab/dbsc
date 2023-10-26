@@ -51,3 +51,6 @@ issues:
     - path: cmd/faucet/
       linters:
         - deadcode
+    - path: core/txpool/legacypool/list.go
+      linters:
+        - staticcheck

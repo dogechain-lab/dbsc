@@ -39,6 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
@@ -269,27 +271,31 @@ func newTestServerHandler(blocks int, indexers []*core.ChainIndexer, db ethdb.Da
 	simulation := backends.NewSimulatedBackendWithDatabase(db, gspec.Alloc, 100000000)
 	prepare(blocks, simulation)
 
-	txpoolConfig := core.DefaultTxPoolConfig
+	txpoolConfig := legacypool.DefaultConfig
 	txpoolConfig.Journal = ""
-	txpool := core.NewTxPool(txpoolConfig, gspec.Config, simulation.Blockchain())
-	if indexers != nil {
-		checkpointConfig := &params.CheckpointOracleConfig{
-			Address:   crypto.CreateAddress(bankAddr, 0),
-			Signers:   []common.Address{signerAddr},
-			Threshold: 1,
-		}
-		getLocal := func(index uint64) params.TrustedCheckpoint {
-			chtIndexer := indexers[0]
-			sectionHead := chtIndexer.SectionHead(index)
-			return params.TrustedCheckpoint{
-				SectionIndex: index,
-				SectionHead:  sectionHead,
-				CHTRoot:      light.GetChtRoot(db, index, sectionHead),
-				BloomRoot:    light.GetBloomTrieRoot(db, index, sectionHead),
-			}
-		}
-		oracle = checkpointoracle.New(checkpointConfig, getLocal)
-	}
+
+	pool := legacypool.New(txpoolConfig, simulation.Blockchain())
+	txpool, _ := txpool.New(new(big.Int).SetUint64(txpoolConfig.PriceLimit), simulation.Blockchain(), []txpool.SubPool{pool})
+
+	// if indexers != nil {
+	// 	checkpointConfig := &params.CheckpointOracleConfig{
+	// 		Address:   crypto.CreateAddress(bankAddr, 0),
+	// 		Signers:   []common.Address{signerAddr},
+	// 		Threshold: 1,
+	// 	}
+	// 	getLocal := func(index uint64) params.TrustedCheckpoint {
+	// 		chtIndexer := indexers[0]
+	// 		sectionHead := chtIndexer.SectionHead(index)
+	// 		return params.TrustedCheckpoint{
+	// 			SectionIndex: index,
+	// 			SectionHead:  sectionHead,
+	// 			CHTRoot:      light.GetChtRoot(db, index, sectionHead),
+	// 			BloomRoot:    light.GetBloomTrieRoot(db, index, sectionHead),
+	// 		}
+	// 	}
+	// 	oracle = checkpointoracle.New(checkpointConfig, getLocal)
+	// }
+
 	server := &LesServer{
 		lesCommons: lesCommons{
 			genesis:     genesis.Hash(),

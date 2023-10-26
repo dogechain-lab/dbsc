@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -93,7 +94,7 @@ var Defaults = Config{
 		Recommit:      3 * time.Second,
 		DelayLeftOver: 50 * time.Millisecond,
 	},
-	TxPool:        core.DefaultTxPoolConfig,
+	TxPool:        legacypool.DefaultConfig,
 	RPCGasCap:     50000000,
 	RPCEVMTimeout: 5 * time.Second,
 	GPO:           FullNodeGPO,
@@ -209,7 +210,7 @@ type Config struct {
 	Ethash ethash.Config `toml:",omitempty"`
 
 	// Transaction pool options
-	TxPool core.TxPoolConfig
+	TxPool legacypool.Config
 
 	// Gas Price Oracle options
 	GPO gasprice.Config
@@ -247,7 +248,7 @@ type Config struct {
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
-func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.PublicBlockChainAPI, genesisHash common.Hash) (consensus.Engine, error) {
+func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database, ee *ethapi.BlockChainAPI, genesisHash common.Hash) (consensus.Engine, error) {
 	// drab
 	if chainConfig.Drab != nil {
 		return drab.New(chainConfig, db, ee, genesisHash), nil

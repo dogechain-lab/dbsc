@@ -198,11 +198,11 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cacheConfig *CacheConfig        // Cache configuration for pruning
 
-	db         ethdb.Database // Low level persistent database to store final content in
-	snaps      *snapshot.Tree // Snapshot tree for fast trie leaf access
-	triegc     *prque.Prque   // Priority queue mapping block numbers to tries to gc
-	gcproc     time.Duration  // Accumulates canonical block processing for trie dumping
-	commitLock sync.Mutex     // CommitLock is used to protect above field from being modified concurrently
+	db         ethdb.Database                   // Low level persistent database to store final content in
+	snaps      *snapshot.Tree                   // Snapshot tree for fast trie leaf access
+	triegc     *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
+	gcproc     time.Duration                    // Accumulates canonical block processing for trie dumping
+	commitLock sync.Mutex                       // CommitLock is used to protect above field from being modified concurrently
 
 	// txLookupLimit is the maximum number of blocks from head whose tx indices
 	// are reserved:
@@ -241,10 +241,10 @@ type BlockChain struct {
 	badBlockCache *lru.Cache     // Cache for the blocks that failed to pass MPT root verification
 
 	// trusted diff layers
-	diffLayerCache             *lru.Cache   // Cache for the diffLayers
-	diffLayerRLPCache          *lru.Cache   // Cache for the rlp encoded diffLayers
-	diffLayerChanCache         *lru.Cache   // Cache for the difflayer channel
-	diffQueue                  *prque.Prque // A Priority queue to store recent diff layer
+	diffLayerCache             *lru.Cache                            // Cache for the diffLayers
+	diffLayerRLPCache          *lru.Cache                            // Cache for the rlp encoded diffLayers
+	diffLayerChanCache         *lru.Cache                            // Cache for the difflayer channel
+	diffQueue                  *prque.Prque[int64, *types.DiffLayer] // A Priority queue to store recent diff layer
 	diffQueueBuffer            chan *types.DiffLayer
 	diffLayerFreezerBlockLimit uint64
 
@@ -305,7 +305,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		chainConfig: chainConfig,
 		cacheConfig: cacheConfig,
 		db:          db,
-		triegc:      prque.New(nil),
+		triegc:      prque.New[int64, common.Hash](nil),
 		stateCache: state.NewDatabaseWithConfigAndCache(db, &trie.Config{
 			Cache:     cacheConfig.TrieCleanLimit,
 			Journal:   cacheConfig.TrieCleanJournal,
@@ -327,7 +327,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 		futureBlocks:          futureBlocks,
 		engine:                engine,
 		vmConfig:              vmConfig,
-		diffQueue:             prque.New(nil),
+		diffQueue:             prque.New[int64, *types.DiffLayer](nil),
 		diffQueueBuffer:       make(chan *types.DiffLayer),
 		blockHashToDiffLayers: make(map[common.Hash]map[common.Hash]*types.DiffLayer),
 		diffHashToBlockHash:   make(map[common.Hash]common.Hash),
@@ -1098,7 +1098,7 @@ func (bc *BlockChain) Stop() {
 			}
 		}
 		for !bc.triegc.Empty() {
-			go triedb.Dereference(bc.triegc.PopItem().(common.Hash))
+			go triedb.Dereference(bc.triegc.PopItem())
 		}
 		if size, _ := triedb.Size(); size != 0 {
 			log.Error("Dangling trie nodes after full cleanup")
@@ -1549,7 +1549,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 					}
 					wg2.Add(1)
 					go func() {
-						triedb.Dereference(root.(common.Hash))
+						triedb.Dereference(root)
 						wg2.Done()
 					}()
 				}
@@ -1711,7 +1711,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 	// Start a parallel signature recovery (signer will fluke on fork transition, minimal perf loss)
 	signer := types.MakeSigner(bc.chainConfig, chain[0].Number())
-	go senderCacher.recoverFromBlocks(signer, chain)
+	go SenderCacher.RecoverFromBlocks(signer, chain)
 
 	var (
 		stats     = insertStats{startTime: mclock.Now()}
@@ -2546,8 +2546,7 @@ func (bc *BlockChain) trustedDiffLayerLoop() {
 			// If the client been ungracefully shutdown, it will missing all cached diff layers, it is acceptable as well.
 			var batch ethdb.Batch
 			for !bc.diffQueue.Empty() {
-				diff, _ := bc.diffQueue.Pop()
-				diffLayer := diff.(*types.DiffLayer)
+				diffLayer, _ := bc.diffQueue.Pop()
 				if batch == nil {
 					batch = bc.db.DiffStore().NewBatch()
 				}
@@ -2573,8 +2572,7 @@ func (bc *BlockChain) trustedDiffLayerLoop() {
 			currentHeight := bc.CurrentBlock().NumberU64()
 			var batch ethdb.Batch
 			for !bc.diffQueue.Empty() {
-				diff, prio := bc.diffQueue.Pop()
-				diffLayer := diff.(*types.DiffLayer)
+				diffLayer, prio := bc.diffQueue.Pop()
 
 				// if the block not old enough
 				if int64(currentHeight)+prio < int64(bc.triesInMemory) {

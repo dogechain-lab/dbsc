@@ -91,7 +91,7 @@ func (d *Downloader) concurrentFetch(queue typedQueue) error {
 		}
 	}()
 	ordering := make(map[*eth.Request]int)
-	timeouts := prque.New(func(data interface{}, index int) {
+	timeouts := prque.New[int64](func(data interface{}, index int) {
 		ordering[data.(*eth.Request)] = index
 	})
 

@@ -81,8 +81,8 @@ func (p *Peer) broadcastTransactions() {
 			)
 			for i := 0; i < len(queue) && size < maxTxPacketSize; i++ {
 				if tx := p.txpool.Get(queue[i]); tx != nil {
-					txs = append(txs, tx)
-					size += tx.Size()
+					txs = append(txs, tx.Tx)
+					size += common.StorageSize(tx.Tx.Size())
 				}
 				hashesCount++
 			}

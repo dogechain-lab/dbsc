@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/dccontracts"
 	"github.com/ethereum/go-ethereum/core/forkid"
@@ -184,7 +185,7 @@ type Drab struct {
 
 	lock sync.RWMutex // Protects the signer fields
 
-	ethAPI          *ethapi.PublicBlockChainAPI
+	ethAPI          *ethapi.BlockChainAPI
 	validatorSetABI *abi.ABI
 	bridgeABI       *abi.ABI
 	vaultABI        *abi.ABI
@@ -194,7 +195,7 @@ type Drab struct {
 func New(
 	chainConfig *params.ChainConfig,
 	db ethdb.Database,
-	ethAPI *ethapi.PublicBlockChainAPI,
+	ethAPI *ethapi.BlockChainAPI,
 	genesisHash common.Hash,
 ) *Drab {
 	// get config
@@ -393,7 +394,7 @@ func (d *Drab) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 		if header.BaseFee != nil {
 			return fmt.Errorf("invalid baseFee before fork: have %d, expected 'nil'", header.BaseFee)
 		}
-	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
+	} else if err := eip1559.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
 		// Verify the header's EIP-1559 attributes.
 		return err
 	}
@@ -450,7 +451,7 @@ func (d *Drab) verifyCascadingFields(chain consensus.ChainHeaderReader, header *
 
 func (d *Drab) verifyGasLimit(parent, header *types.Header) error {
 	if d.chainConfig.IsLondon(header.Number) {
-		return misc.VerifyEip1559Header(d.chainConfig, parent, header)
+		return eip1559.VerifyEip1559Header(d.chainConfig, parent, header)
 	}
 	return verifyGaslimit(parent.GasLimit, header.GasLimit)
 }
