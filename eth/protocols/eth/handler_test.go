@@ -79,16 +79,19 @@ func newTestBackendWithGenerator(blocks int, generator func(int, *core.BlockGen)
 	txconfig := legacypool.DefaultConfig
 	txconfig.Journal = "" // Don't litter the disk with test journals
 
+	pool := legacypool.New(txconfig, chain)
+	txpool, _ := txpool.New(new(big.Int).SetUint64(txconfig.PriceLimit), chain, []txpool.SubPool{pool})
+
 	return &testBackend{
 		db:     db,
 		chain:  chain,
-		txpool: core.NewTxPool(txconfig, params.TestChainConfig, chain),
+		txpool: txpool,
 	}
 }
 
 // close tears down the transaction pool and chain behind the mock backend.
 func (b *testBackend) close() {
-	b.txpool.Stop()
+	b.txpool.Close()
 	b.chain.Stop()
 }
 

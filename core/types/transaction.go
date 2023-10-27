@@ -143,7 +143,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		var inner LegacyTx
 		err := s.Decode(&inner)
 		if err == nil {
-			tx.setDecoded(&inner, int(rlp.ListSize(size)))
+			tx.setDecoded(&inner, uint64(rlp.ListSize(size)))
 		}
 		return err
 	case kind == rlp.String:
@@ -154,7 +154,7 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 		}
 		inner, err := tx.decodeTyped(b)
 		if err == nil {
-			tx.setDecoded(inner, len(b))
+			tx.setDecoded(inner, uint64(len(b)))
 		}
 		return err
 	default:
@@ -172,7 +172,7 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 		if err != nil {
 			return err
 		}
-		tx.setDecoded(&data, len(b))
+		tx.setDecoded(&data, uint64(len(b)))
 		return nil
 	}
 	// It's an EIP2718 typed transaction envelope.
@@ -180,7 +180,7 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if err != nil {
 		return err
 	}
-	tx.setDecoded(inner, len(b))
+	tx.setDecoded(inner, uint64(len(b)))
 	return nil
 }
 
@@ -204,11 +204,11 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 }
 
 // setDecoded sets the inner transaction and size after decoding.
-func (tx *Transaction) setDecoded(inner TxData, size int) {
+func (tx *Transaction) setDecoded(inner TxData, size uint64) {
 	tx.inner = inner
 	tx.time = time.Now()
 	if size > 0 {
-		tx.size.Store(common.StorageSize(size))
+		tx.size.Store(size)
 	}
 }
 

@@ -71,11 +71,14 @@ require (
 
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
+	github.com/crate-crypto/go-kzg-4844 v0.3.0
 	github.com/dogechain-lab/dogechain v1.2.6-0.20230801015717-955cdb2527b3
+	github.com/ethereum/c-kzg-4844/bindings/go v0.0.0-20230126171313-363c7d7593b4
 	github.com/fatih/structs v1.1.0
 	github.com/hashicorp/go-hclog v1.5.0
 	github.com/prometheus/client_golang v1.14.0
 	go.uber.org/automaxprocs v1.5.3
+	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
 )
 
 require (
@@ -102,7 +105,6 @@ require (
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/containerd/cgroups v1.0.4 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
-	github.com/crate-crypto/go-kzg-4844 v0.7.0 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.1.0 // indirect
 	github.com/dlclark/regexp2 v1.4.1-0.20201116162257-a2a8dda75c91 // indirect
@@ -205,6 +207,7 @@ require (
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
+	github.com/supranational/blst v0.3.11-0.20230124161941-ca03e11a3ff2 // indirect
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	github.com/umbracle/fastrlp v0.0.0-20220527094140-59d5dd30e722 // indirect
@@ -223,7 +226,6 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
-	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.13.0 // indirect
 	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/term v0.13.0 // indirect

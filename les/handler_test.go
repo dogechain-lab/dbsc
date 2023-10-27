@@ -625,7 +625,7 @@ func testTransactionStatus(t *testing.T, protocol int) {
 
 	// test error status by sending an underpriced transaction
 	tx0, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, nil, nil), signer, bankKey)
-	test(tx0, true, light.TxStatus{Status: txpool.TxStatusUnknown, Error: core.ErrUnderpriced.Error()})
+	test(tx0, true, light.TxStatus{Status: txpool.TxStatusUnknown, Error: txpool.ErrUnderpriced.Error()})
 
 	tx1, _ := types.SignTx(types.NewTransaction(0, userAddr1, big.NewInt(10000), params.TxGas, big.NewInt(100000000000), nil), signer, bankKey)
 	test(tx1, false, light.TxStatus{Status: txpool.TxStatusUnknown}) // query before sending, should be unknown

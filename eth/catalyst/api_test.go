@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/beacon"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -86,7 +87,7 @@ func TestEth2AssembleBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error signing transaction, err=%v", err)
 	}
-	ethservice.TxPool().AddLocal(tx)
+	ethservice.TxPool().Add([]*txpool.Transaction{{Tx: tx}}, false, true)
 	blockParams := beacon.PayloadAttributesV1{
 		Timestamp: blocks[9].Time() + 5,
 	}
@@ -260,7 +261,7 @@ func TestEth2NewBlock(t *testing.T) {
 		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
-		ethservice.TxPool().AddLocal(tx)
+		ethservice.TxPool().Add([]*txpool.Transaction{{Tx: tx}}, true, true)
 
 		execData, err := api.assembleBlock(parent.Hash(), &beacon.PayloadAttributesV1{
 			Timestamp: parent.Time() + 5,
@@ -423,7 +424,7 @@ func TestFullAPI(t *testing.T) {
 		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
 		nonce := statedb.GetNonce(testAddr)
 		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
-		ethservice.TxPool().AddLocal(tx)
+		ethservice.TxPool().Add([]*txpool.Transaction{{Tx: tx}}, true, true)
 
 		params := beacon.PayloadAttributesV1{
 			Timestamp:             parent.Time() + 1,

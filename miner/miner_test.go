@@ -19,6 +19,7 @@ package miner
 
 import (
 	"errors"
+	"math/big"
 	"testing"
 	"time"
 
@@ -28,11 +29,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 )
 
@@ -61,9 +64,21 @@ func (m *mockBackend) StateAtBlock(block *types.Block, reexec uint64, base *stat
 }
 
 type testBlockChain struct {
+	config        *params.ChainConfig
 	statedb       *state.StateDB
 	gasLimit      uint64
 	chainHeadFeed *event.Feed
+}
+
+func (bc *testBlockChain) Config() *params.ChainConfig {
+	return bc.config
+}
+
+func (bc *testBlockChain) CurrentHeader() *types.Header {
+	return &types.Header{
+		Number:   new(big.Int),
+		GasLimit: bc.gasLimit,
+	}
 }
 
 func (bc *testBlockChain) CurrentBlock() *types.Block {
@@ -263,10 +278,12 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 		t.Fatalf("can't create new chain %v", err)
 	}
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(chainDB), nil)
-	blockchain := &testBlockChain{statedb, 10000000, new(event.Feed)}
+	blockchain := &testBlockChain{chainConfig, statedb, 10000000, new(event.Feed)}
 
-	pool := core.NewTxPool(testTxPoolConfig, chainConfig, blockchain)
-	backend := NewMockBackend(bc, pool)
+	pool := legacypool.New(testTxPoolConfig, blockchain)
+	txpool, _ := txpool.New(new(big.Int).SetUint64(testTxPoolConfig.PriceLimit), blockchain, []txpool.SubPool{pool})
+
+	backend := NewMockBackend(bc, txpool)
 	// Create event Mux
 	mux := new(event.TypeMux)
 	// Create Miner
@@ -274,7 +291,7 @@ func createMiner(t *testing.T) (*Miner, *event.TypeMux, func(skipMiner bool)) {
 	cleanup := func(skipMiner bool) {
 		bc.Stop()
 		engine.Close()
-		pool.Stop()
+		pool.Close()
 		if !skipMiner {
 			miner.Close()
 		}
