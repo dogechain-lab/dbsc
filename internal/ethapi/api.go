@@ -92,8 +92,8 @@ type feeHistoryResult struct {
 	GasUsedRatio []float64        `json:"gasUsedRatio"`
 }
 
-func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount rpc.DecimalOrHex, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
-	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, int(blockCount), lastBlock, rewardPercentiles)
+func (s *PublicEthereumAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecimal64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*feeHistoryResult, error) {
+	oldest, reward, baseFee, gasUsed, err := s.b.FeeHistory(ctx, uint64(blockCount), lastBlock, rewardPercentiles)
 	if err != nil {
 		return nil, err
 	}
@@ -763,13 +763,6 @@ func (s *PublicBlockChainAPI) GetBlockByHash(ctx context.Context, hash common.Ha
 		return s.rpcMarshalBlock(ctx, block, true, fullTx)
 	}
 	return nil, err
-}
-
-func (s *PublicBlockChainAPI) Health() bool {
-	if rpc.RpcServingTimer != nil {
-		return rpc.RpcServingTimer.Percentile(0.75) < float64(UnHealthyTimeout)
-	}
-	return true
 }
 
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index.

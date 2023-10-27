@@ -84,6 +84,15 @@ type GenericStringResponse struct {
 	Status string `json:"status"`
 }
 
+type CustomError struct {
+	Code            int
+	ValidationError string
+}
+
+func (e *CustomError) ErrorCode() int { return e.Code }
+
+func (e *CustomError) Error() string { return e.ValidationError }
+
 type ExecutePayloadResponse struct {
 	Status          string      `json:"status"`
 	LatestValidHash common.Hash `json:"latestValidHash"`
