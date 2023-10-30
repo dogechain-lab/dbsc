@@ -62,11 +62,9 @@ type jsonWriter interface {
 type BlockNumber int64
 
 const (
-	SafeBlockNumber      = BlockNumber(-4)
-	FinalizedBlockNumber = BlockNumber(-3)
-	LatestBlockNumber    = BlockNumber(-2)
-	PendingBlockNumber   = BlockNumber(-1)
-	EarliestBlockNumber  = BlockNumber(0)
+	LatestBlockNumber   = BlockNumber(-2)
+	PendingBlockNumber  = BlockNumber(-1)
+	EarliestBlockNumber = BlockNumber(0)
 )
 
 // UnmarshalJSON parses the given JSON fragment into a BlockNumber. It supports:
@@ -90,12 +88,6 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 		return nil
 	case "pending":
 		*bn = PendingBlockNumber
-		return nil
-	case "finalized":
-		*bn = FinalizedBlockNumber
-		return nil
-	case "safe":
-		*bn = SafeBlockNumber
 		return nil
 	}
 
@@ -130,10 +122,6 @@ func (bn BlockNumber) String() string {
 		return "latest"
 	case PendingBlockNumber:
 		return "pending"
-	case FinalizedBlockNumber:
-		return "finalized"
-	case SafeBlockNumber:
-		return "safe"
 	default:
 		if bn < 0 {
 			return fmt.Sprintf("<invalid %d>", bn)
@@ -177,14 +165,6 @@ func (bnh *BlockNumberOrHash) UnmarshalJSON(data []byte) error {
 		return nil
 	case "pending":
 		bn := PendingBlockNumber
-		bnh.BlockNumber = &bn
-		return nil
-	case "finalized":
-		bn := FinalizedBlockNumber
-		bnh.BlockNumber = &bn
-		return nil
-	case "safe":
-		bn := SafeBlockNumber
 		bnh.BlockNumber = &bn
 		return nil
 	default:
