@@ -134,7 +134,7 @@ var (
 	}
 	DisableDiffProtocolFlag = cli.BoolFlag{
 		Name:  "disablediffprotocol",
-		Usage: "Disable diff protocol",
+		Usage: "Disable diff protocol(default is true)",
 	}
 	EnableTrustProtocolFlag = cli.BoolFlag{
 		Name:  "enabletrustprotocol",
