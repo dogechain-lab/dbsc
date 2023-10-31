@@ -467,6 +467,9 @@ func (s *Ethereum) shouldPreserve(header *types.Header) bool {
 	if _, ok := s.engine.(*parlia.Parlia); ok {
 		return false
 	}
+	if _, ok := s.engine.(*drab.Drab); ok {
+		return false
+	}
 	return s.isLocalBlock(header)
 }
 
