@@ -38,14 +38,16 @@ const (
 
 // DefaultConfig contains reasonable default settings.
 var DefaultConfig = Config{
-	DataDir:             DefaultDataDir(),
-	HTTPPort:            DefaultHTTPPort,
-	HTTPModules:         []string{"net", "web3"},
-	HTTPVirtualHosts:    []string{"localhost"},
-	HTTPTimeouts:        rpc.DefaultHTTPTimeouts,
-	WSPort:              DefaultWSPort,
-	WSModules:           []string{"net", "web3"},
-	GraphQLVirtualHosts: []string{"localhost"},
+	DataDir:              DefaultDataDir(),
+	HTTPPort:             DefaultHTTPPort,
+	HTTPModules:          []string{"net", "web3"},
+	HTTPVirtualHosts:     []string{"localhost"},
+	HTTPTimeouts:         rpc.DefaultHTTPTimeouts,
+	WSPort:               DefaultWSPort,
+	WSModules:            []string{"net", "web3"},
+	BatchRequestLimit:    1,
+	BatchResponseMaxSize: 4 * 1024 * 1024,
+	GraphQLVirtualHosts:  []string{"localhost"},
 	P2P: p2p.Config{
 		ListenAddr: ":30303",
 		MaxPeers:   50,

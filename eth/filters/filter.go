@@ -151,7 +151,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	var (
 		head    = header.Number.Uint64()
 		end     = uint64(f.end)
-		pending = f.end == rpc.PendingBlockNumber.Int64()
+		pending = f.end == rpc.LatestBlockNumber.Int64()
 	)
 	if f.begin == rpc.LatestBlockNumber.Int64() {
 		f.begin = int64(head)
