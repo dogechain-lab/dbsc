@@ -220,7 +220,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 	if err != nil || blocks == 0 {
 		return common.Big0, nil, nil, nil, err
 	}
-	oldestBlock := lastBlock + 1 - uint64(blocks)
+	oldestBlock := lastBlock + 1 - blocks
 
 	var (
 		next    = oldestBlock
