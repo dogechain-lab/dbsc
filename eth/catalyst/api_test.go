@@ -237,6 +237,104 @@ func TestInvalidPayloadTimestamp(t *testing.T) {
 	}
 }
 
+func TestEth2NewBlock(t *testing.T) {
+	genesis, preMergeBlocks := generatePreMergeChain(10)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks)
+	ethservice.Merger().ReachTTD()
+	defer n.Close()
+
+	var (
+		api    = NewConsensusAPI(ethservice)
+		parent = preMergeBlocks[len(preMergeBlocks)-1]
+
+		// This EVM code generates a log when the contract is created.
+		logCode = common.Hex2Bytes("60606040525b7f24ec1d3ff24c2f6ff210738839dbc339cd45a5294d85c79361016243157aae7b60405180905060405180910390a15b600a8060416000396000f360606040526008565b00")
+	)
+	// The event channels.
+	newLogCh := make(chan []*types.Log, 10)
+	rmLogsCh := make(chan core.RemovedLogsEvent, 10)
+	ethservice.BlockChain().SubscribeLogsEvent(newLogCh)
+	ethservice.BlockChain().SubscribeRemovedLogsEvent(rmLogsCh)
+
+	for i := 0; i < 10; i++ {
+		statedb, _ := ethservice.BlockChain().StateAt(parent.Root())
+		nonce := statedb.GetNonce(testAddr)
+		tx, _ := types.SignTx(types.NewContractCreation(nonce, new(big.Int), 1000000, big.NewInt(2*params.InitialBaseFee), logCode), types.LatestSigner(ethservice.BlockChain().Config()), testKey)
+		ethservice.TxPool().AddLocal(tx)
+
+		execData, err := api.assembleBlock(parent.Hash(), &beacon.PayloadAttributesV1{
+			Timestamp: parent.Time() + 5,
+		})
+		if err != nil {
+			t.Fatalf("Failed to create the executable data %v", err)
+		}
+		block, err := beacon.ExecutableDataToBlock(*execData)
+		if err != nil {
+			t.Fatalf("Failed to convert executable data to block %v", err)
+		}
+		newResp, err := api.ExecutePayloadV1(*execData)
+		if err != nil || newResp.Status != "VALID" {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64()-1 {
+			t.Fatalf("Chain head shouldn't be updated")
+		}
+		checkLogEvents(t, newLogCh, rmLogsCh, 0, 0)
+		fcState := beacon.ForkchoiceStateV1{
+			HeadBlockHash:      block.Hash(),
+			SafeBlockHash:      block.Hash(),
+			FinalizedBlockHash: block.Hash(),
+		}
+		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
+			t.Fatalf("Chain head should be updated")
+		}
+		checkLogEvents(t, newLogCh, rmLogsCh, 1, 0)
+
+		parent = block
+	}
+
+	// Introduce fork chain
+	var (
+		head = ethservice.BlockChain().CurrentBlock().NumberU64()
+	)
+	parent = preMergeBlocks[len(preMergeBlocks)-1]
+	for i := 0; i < 10; i++ {
+		execData, err := api.assembleBlock(parent.Hash(), &beacon.PayloadAttributesV1{
+			Timestamp: parent.Time() + 6,
+		})
+		if err != nil {
+			t.Fatalf("Failed to create the executable data %v", err)
+		}
+		block, err := beacon.ExecutableDataToBlock(*execData)
+		if err != nil {
+			t.Fatalf("Failed to convert executable data to block %v", err)
+		}
+		newResp, err := api.ExecutePayloadV1(*execData)
+		if err != nil || newResp.Status != "VALID" {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+		if ethservice.BlockChain().CurrentBlock().NumberU64() != head {
+			t.Fatalf("Chain head shouldn't be updated")
+		}
+
+		fcState := beacon.ForkchoiceStateV1{
+			HeadBlockHash:      block.Hash(),
+			SafeBlockHash:      block.Hash(),
+			FinalizedBlockHash: block.Hash(),
+		}
+		if _, err := api.ForkchoiceUpdatedV1(fcState, nil); err != nil {
+			t.Fatalf("Failed to insert block: %v", err)
+		}
+		if ethservice.BlockChain().CurrentBlock().NumberU64() != block.NumberU64() {
+			t.Fatalf("Chain head should be updated")
+		}
+		parent, head = block, block.NumberU64()
+	}
+}
+
 func TestEth2DeepReorg(t *testing.T) {
 	// TODO (MariusVanDerWijden) TestEth2DeepReorg is currently broken, because it tries to reorg
 	// before the totalTerminalDifficulty threshold
