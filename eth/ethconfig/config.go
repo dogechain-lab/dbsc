@@ -86,6 +86,7 @@ var Defaults = Config{
 	TriesInMemory:           128,
 	TriesVerifyMode:         core.LocalVerify,
 	SnapshotCache:           102,
+	DisableDiffProtocol:     true,
 	DiffBlock:               uint64(86400),
 	Miner: miner.Config{
 		GasCeil:       8000000,
