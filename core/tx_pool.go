@@ -288,6 +288,8 @@ type TxPool struct {
 	initDoneCh      chan struct{}  // is closed once the pool is initialized (for tests)
 
 	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
+
+	badAddresses map[common.Address]struct{} // bad addresses to banish
 }
 
 type txpoolResetRequest struct {
@@ -318,6 +320,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgShutdownCh: make(chan struct{}),
 		initDoneCh:      make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+		badAddresses:    make(map[common.Address]struct{}),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -326,6 +329,11 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	}
 	pool.priced = newTxPricedList(pool.all)
 	pool.reset(nil, chain.CurrentBlock().Header())
+	if pool.chainconfig.Drab != nil {
+		for _, addr := range pool.chainconfig.Drab.Blacklist {
+			pool.badAddresses[common.HexToAddress(addr)] = struct{}{}
+		}
+	}
 
 	// Start the reorg loop early so it can handle requests generated during journal loading.
 	pool.wg.Add(1)
@@ -1002,6 +1010,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		errs = make([]error, len(txs))
 		news = make([]*types.Transaction, 0, len(txs))
 	)
+
 	for i, tx := range txs {
 		// If the transaction is known, pre-set the error slot
 		if pool.all.Get(tx.Hash()) != nil {
@@ -1018,12 +1027,22 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			invalidTxMeter.Mark(1)
 			continue
 		}
+		// check it out whether it's in bad address lists
 		shouldBlock := false
 		for _, blackAddr := range types.NanoBlackList {
 			if sender == blackAddr || (tx.To() != nil && *tx.To() == blackAddr) {
 				shouldBlock = true
 				log.Error("blacklist account detected", "account", blackAddr, "tx", tx.Hash())
 				break
+			}
+		}
+		if !shouldBlock {
+			_, isSender := pool.badAddresses[sender]
+			receiver := *tx.To()
+			_, isReceiver := pool.badAddresses[receiver]
+			if isSender || isReceiver {
+				shouldBlock = true
+				log.Error("blacklist account detected", "sender", sender, "receiver", receiver, "tx", tx.Hash())
 			}
 		}
 		// Accumulate all unknown transactions for deeper processing

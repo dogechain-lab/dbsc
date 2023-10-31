@@ -449,8 +449,9 @@ const (
 
 // ParliaConfig is the consensus engine configs for istanbul-byzantium-fault-tolarance based sealing.
 type DrabConfig struct {
-	BlockTime uint64 `json:"blockTime"`
-	EpochSize uint64 `json:"epochSize"`
+	BlockTime uint64   `json:"blockTime"`
+	EpochSize uint64   `json:"epochSize"`
+	Blacklist []string `json:"blacklist,omitempty"`
 }
 
 // ParliaConfig is the consensus engine configs for proof-of-staked-authority based sealing.
