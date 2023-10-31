@@ -1038,7 +1038,10 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		}
 		if !shouldBlock {
 			_, isSender := pool.badAddresses[sender]
-			receiver := *tx.To()
+			var receiver common.Address
+			if tx.To() != nil {
+				receiver = *tx.To()
+			}
 			_, isReceiver := pool.badAddresses[receiver]
 			if isSender || isReceiver {
 				shouldBlock = true
