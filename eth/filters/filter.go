@@ -151,7 +151,7 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	var (
 		head    = header.Number.Uint64()
 		end     = uint64(f.end)
-		pending = f.end == rpc.LatestBlockNumber.Int64()
+		pending = f.end == rpc.PendingBlockNumber.Int64()
 	)
 	if f.begin == rpc.LatestBlockNumber.Int64() {
 		f.begin = int64(head)
@@ -306,6 +306,10 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs [
 // pendingLogs returns the logs matching the filter criteria within the pending block.
 func (f *Filter) pendingLogs() ([]*types.Log, error) {
 	block, receipts := f.backend.PendingBlockAndReceipts()
+	// the pending block might be nil if the miner is disabled
+	if block == nil || len(receipts) == 0 {
+		return nil, nil
+	}
 	if bloomFilter(block.Bloom(), f.addresses, f.topics) {
 		var unfiltered []*types.Log
 		for _, r := range receipts {
