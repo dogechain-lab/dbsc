@@ -120,18 +120,24 @@ func (miner *Miner) update() {
 					shouldStart = true
 					log.Info("Mining aborted due to sync")
 				}
+				miner.worker.syncing.Store(true)
+
 			case downloader.FailedEvent:
 				canStart = true
 				if shouldStart {
 					miner.SetEtherbase(miner.coinbase)
 					miner.worker.start()
 				}
+				miner.worker.syncing.Store(false)
+
 			case downloader.DoneEvent:
 				canStart = true
 				if shouldStart {
 					miner.SetEtherbase(miner.coinbase)
 					miner.worker.start()
 				}
+				miner.worker.syncing.Store(false)
+
 				// Stop reacting to downloader events
 				events.Unsubscribe()
 			}
@@ -188,7 +194,8 @@ func (miner *Miner) SetRecommitInterval(interval time.Duration) {
 	miner.worker.setRecommitInterval(interval)
 }
 
-// Pending returns the currently pending block and associated state.
+// Pending returns the currently pending block and associated state. The returned
+// values can be nil in case the pending block is not initialized
 func (miner *Miner) Pending() (*types.Block, *state.StateDB) {
 	if miner.worker.isRunning() {
 		pendingBlock, pendingState := miner.worker.pending()
@@ -208,11 +215,11 @@ func (miner *Miner) Pending() (*types.Block, *state.StateDB) {
 	return block, stateDb
 }
 
-// PendingBlock returns the currently pending block.
+// PendingBlock returns the currently pending block. The returned block can be
+// nil in case the pending block is not initialized.
 //
 // Note, to access both the pending block and the pending state
 // simultaneously, please use Pending(), as the pending state can
-// change between multiple method calls
 func (miner *Miner) PendingBlock() *types.Block {
 	if miner.worker.isRunning() {
 		pendingBlock := miner.worker.pendingBlock()
@@ -225,6 +232,7 @@ func (miner *Miner) PendingBlock() *types.Block {
 }
 
 // PendingBlockAndReceipts returns the currently pending block and corresponding receipts.
+// The returned values can be nil in case the pending block is not initialized.
 func (miner *Miner) PendingBlockAndReceipts() (*types.Block, types.Receipts) {
 	return miner.worker.pendingBlockAndReceipts()
 }

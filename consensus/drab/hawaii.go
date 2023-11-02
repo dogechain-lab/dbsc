@@ -18,12 +18,16 @@ const (
 	fixedBackOffTimeBeforeFork = 200 * time.Millisecond
 )
 
+var (
+	randDelaySeed = rand.New(rand.NewSource(time.Now().UnixNano()))
+)
+
 func (d *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Duration {
 	delay := time.Until(time.Unix(int64(header.Time), 0)) // nolint: gosimple
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
 		wiggle := time.Duration(snap.blockLimit()) * wiggleTimeBeforeFork
-		delay += fixedBackOffTimeBeforeFork + time.Duration(rand.Int63n(int64(wiggle)))
+		delay += fixedBackOffTimeBeforeFork + time.Duration(randDelaySeed.Int63n(int64(wiggle)))
 	}
 	return delay
 }

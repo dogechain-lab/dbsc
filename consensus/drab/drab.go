@@ -903,11 +903,6 @@ func (d *Drab) Delay(chain consensus.ChainReader, header *types.Header, leftOver
 		delay = delay - *leftOver
 	}
 
-	// The blocking time should be no more than half of period
-	half := time.Duration(d.config.BlockTime) * time.Second / 2
-	if delay > half {
-		delay = half
-	}
 	return &delay
 }
 
