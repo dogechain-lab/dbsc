@@ -79,7 +79,8 @@ func predeployBridgeSC(owner common.Address, signers []common.Address) *core.Gen
 	// Set the code for the bridge smart contract
 	// Code retrieved from https://github.com/dogechain-lab/dogechain-contracts
 	bridgeAccount := &core.GenesisAccount{
-		Code: dccontracts.DCBridgeContractByteCode,
+		Code:    dccontracts.DCBridgeContractByteCode,
+		Balance: big.NewInt(0),
 	}
 
 	bigDefaultRate := big.NewInt(int64(DefaultBridgeRate))

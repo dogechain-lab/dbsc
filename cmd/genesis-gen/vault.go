@@ -38,7 +38,8 @@ func getVaultStorageIndexes() *vaultStorageIndexes {
 // using the passed in owner and signers as pre-defined accounts.
 func predeployVaultSC(owner common.Address) *core.GenesisAccount {
 	contractAccount := &core.GenesisAccount{
-		Code: dccontracts.DCVaultContractByteCode,
+		Code:    dccontracts.DCVaultContractByteCode,
+		Balance: big.NewInt(0),
 	}
 
 	// Generate the empty account storage map
