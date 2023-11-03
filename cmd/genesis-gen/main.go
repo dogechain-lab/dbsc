@@ -53,7 +53,7 @@ var (
 	timestampFlag = cli.Uint64Flag{
 		Name:  "timestamp",
 		Usage: "Timestamp of the genesis block",
-		Value: 0,
+		Value: 2,
 	}
 	epochSizeFlag = cli.Uint64Flag{
 		Name:  "epoch-size",
@@ -162,20 +162,18 @@ func genesisGen(c *cli.Context) error {
 		EIP150Block:         big.NewInt(0),
 		EIP155Block:         big.NewInt(0),
 		EIP158Block:         big.NewInt(0),
-		IBFTBlock:           big.NewInt(0),
+		IBFTBlock:           big.NewInt(0), // dogechain v1
 		ByzantiumBlock:      big.NewInt(0),
 		ConstantinopleBlock: big.NewInt(0),
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       big.NewInt(0),
-		PreportlandBlock:    big.NewInt(1), // dogechain system contract upgrade
-		PortlandBlock:       big.NewInt(2),
-		DetroitBlock:        big.NewInt(3),
 		// enable together in hawaii fork
-		BerlinBlock: big.NewInt(4),
-		LondonBlock: big.NewInt(4),
-		NanoBlock:   big.NewInt(4), // blacklist
-		HawaiiBlock: big.NewInt(4),
+		BerlinBlock: big.NewInt(1),
+		LondonBlock: big.NewInt(1),
+		NanoBlock:   big.NewInt(1), // blacklist
+		HawaiiBlock: big.NewInt(1),
 		Drab: &params.DrabConfig{
+			BlockTime: c.GlobalUint64(timestampFlag.Name),
 			EpochSize: c.GlobalUint64(epochSizeFlag.Name),
 		},
 	}
@@ -183,13 +181,14 @@ func genesisGen(c *cli.Context) error {
 	genesis := &core.Genesis{
 		Config:     chainConfig,
 		Nonce:      0,
-		Timestamp:  c.GlobalUint64(timestampFlag.Name),
+		Timestamp:  0,
 		GasLimit:   c.GlobalUint64(gasLimitFlag.Name),
 		GasUsed:    c.GlobalUint64(gasUsedFlag.Name),
 		Difficulty: big.NewInt(1),
 		ParentHash: common.Hash{},
 		Mixhash:    common.Hash{},
 		Coinbase:   common.Address{},
+		BaseFee:    big.NewInt(0),
 	}
 
 	// GenesisAlloc

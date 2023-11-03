@@ -85,7 +85,8 @@ const (
 // using the passed in validators as pre-staked validators
 func predeployValidatorSet(owner common.Address, validators []common.Address) (*core.GenesisAccount, error) {
 	stakingAccount := &core.GenesisAccount{
-		Code: dccontracts.DCValidatorSetContractByteCode,
+		Code:    dccontracts.DCValidatorSetContractByteCode,
+		Balance: big.NewInt(0),
 	}
 	if owner == (common.Address{}) {
 		return nil, errors.New("contract owner should not be empty")
