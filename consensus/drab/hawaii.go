@@ -16,7 +16,7 @@ const (
 	processBackOffTime         = uint64(1)              // second
 	wiggleTimeGranularity      = 3 * time.Microsecond   // Time granularity of the random delay
 	wiggleTimeBeforeFork       = 900 * time.Millisecond // Random delay (per signer) to allow concurrent signers
-	fixedBackOffTimeBeforeFork = 200 * time.Millisecond
+	fixedBackOffTimeBeforeFork = 400 * time.Millisecond
 )
 
 var (
