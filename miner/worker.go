@@ -25,6 +25,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/clock"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/consensus/parlia"
@@ -764,7 +765,12 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction, rece
 	return receipt.Logs, nil
 }
 
-func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByPriceAndNonce, interruptCh chan int32) error {
+func (w *worker) commitTransactions(
+	env *environment,
+	txs *types.TransactionsByPriceAndNonce,
+	interruptCh chan int32,
+	stopTimer clock.Timer,
+) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -812,6 +818,18 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 			default:
 			}
 		}
+
+		if stopTimer != nil {
+			select {
+			case <-stopTimer.C():
+				signal = commitInterruptTimeout
+				log.Info("Not enough time for further transactions", "txs", len(env.txs))
+				stopTimer.Reset(0)
+				break
+			default:
+			}
+		}
+
 		// If we don't have enough gas for any further transactions then we're done
 		if env.gasPool.Gas() < params.TxGas {
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
@@ -992,7 +1010,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interruptCh chan int32, env *environment) (err error) {
+func (w *worker) fillTransactions(interruptCh chan int32, env *environment, timeout clock.Timer) (err error) {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(false)
@@ -1007,7 +1025,7 @@ func (w *worker) fillTransactions(interruptCh chan int32, env *environment) (err
 	err = nil
 	if len(localTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, localTxs, env.header.BaseFee)
-		err = w.commitTransactions(env, txs, interruptCh)
+		err = w.commitTransactions(env, txs, interruptCh, timeout)
 		// we will abort here when:
 		//   1.new block was imported
 		//   2.out of Gas, no more transaction can be added.
@@ -1020,7 +1038,7 @@ func (w *worker) fillTransactions(interruptCh chan int32, env *environment) (err
 	}
 	if len(remoteTxs) > 0 {
 		txs := types.NewTransactionsByPriceAndNonce(env.signer, remoteTxs, env.header.BaseFee)
-		err = w.commitTransactions(env, txs, interruptCh)
+		err = w.commitTransactions(env, txs, interruptCh, timeout)
 	}
 
 	return
@@ -1034,7 +1052,7 @@ func (w *worker) generateWork(params *generateParams) (*types.Block, error) {
 	}
 	defer work.discard()
 
-	w.fillTransactions(nil, work)
+	w.fillTransactions(nil, work, nil)
 	block, _, err := w.engine.FinalizeAndAssemble(w.chain, work.header, work.state, work.txs, work.unclelist(), work.receipts)
 	return block, err
 }
@@ -1047,6 +1065,10 @@ func (w *worker) commitWork(interruptCh chan int32, timestamp int64) {
 		return
 	}
 	start := time.Now()
+
+	deadlineTimer := clock.NewTimer(0)
+	defer deadlineTimer.Stop()
+	<-deadlineTimer.C() // discard the initial tick
 
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
@@ -1066,8 +1088,25 @@ func (w *worker) commitWork(interruptCh chan int32, timestamp int64) {
 		return
 	}
 
+	// transaction processing time
+	//
+	fillTimeout := time.Until(time.Unix(int64(work.header.Time), 0))/2 - w.config.DelayLeftOver
+	if fillTimeout <= 0 {
+		log.Error(
+			"fillTimeout is negative or zero, this should never happen",
+			"delayLeftOver", w.config.DelayLeftOver,
+			"timestamp", work.header.Time,
+			"now", time.Now().Unix(),
+		)
+		fillTimeout = 200 * time.Millisecond // minimum transaction processing time
+	}
+	if fillTimeout < (w.config.DelayLeftOver * 2) {
+		fillTimeout = w.config.DelayLeftOver * 2
+	}
+	deadlineTimer.Reset(fillTimeout)
+
 	// Fill pending transactions from the txpool
-	err = w.fillTransactions(interruptCh, work)
+	err = w.fillTransactions(interruptCh, work, deadlineTimer)
 	switch {
 	case errors.Is(err, errBlockInterruptedByNewHead):
 		log.Debug("commitWork abort", "err", err)

@@ -14,7 +14,8 @@ const (
 	wiggleTime                 = uint64(1)              // second, Random delay (per signer) to allow concurrent signers
 	initialBackOffTime         = uint64(1)              // second
 	processBackOffTime         = uint64(1)              // second
-	wiggleTimeBeforeFork       = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
+	wiggleTimeGranularity      = 3 * time.Microsecond   // Time granularity of the random delay
+	wiggleTimeBeforeFork       = 900 * time.Millisecond // Random delay (per signer) to allow concurrent signers
 	fixedBackOffTimeBeforeFork = 200 * time.Millisecond
 )
 
@@ -27,7 +28,10 @@ func (d *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Dur
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it a bit
 		wiggle := time.Duration(snap.blockLimit()) * wiggleTimeBeforeFork
-		delay += fixedBackOffTimeBeforeFork + time.Duration(randDelaySeed.Int63n(int64(wiggle)))
+		// range 4 validator [163us, 999842us]
+		wiggle = wiggleTimeGranularity * time.Duration(1+randDelaySeed.Int63n(int64(wiggle/wiggleTimeGranularity)))
+
+		delay += fixedBackOffTimeBeforeFork + wiggle
 	}
 	return delay
 }
