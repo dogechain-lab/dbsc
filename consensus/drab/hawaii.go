@@ -11,12 +11,12 @@ import (
 )
 
 const (
-	wiggleTime                 = uint64(1)              // second, Random delay (per signer) to allow concurrent signers
-	initialBackOffTime         = uint64(1)              // second
-	processBackOffTime         = uint64(1)              // second
-	wiggleTimeGranularity      = 3 * time.Microsecond   // Time granularity of the random delay
-	wiggleTimeBeforeFork       = 900 * time.Millisecond // Random delay (per signer) to allow concurrent signers
-	fixedBackOffTimeBeforeFork = 400 * time.Millisecond
+	wiggleTime         = uint64(1) // second, Random delay (per signer) to allow concurrent signers
+	initialBackOffTime = uint64(1) // second
+	processBackOffTime = uint64(1) // second
+
+	wiggleTimeBeforeForkGranularity = 11 * time.Microsecond // Time granularity of the random delay
+	fixedBackOffTimeBeforeFork      = 200 * time.Millisecond
 )
 
 var (
@@ -24,14 +24,17 @@ var (
 )
 
 func (d *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Duration {
-	delay := time.Until(time.Unix(int64(header.Time), 0)) // nolint: gosimple
+	delay := time.Until(time.Unix(int64(header.Time), 0)) // time until the block is supposed to be mined
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
-		// It's not our turn explicitly to sign, delay it a bit
-		wiggle := time.Duration(snap.blockLimit()) * wiggleTimeBeforeFork
-		// range 4 validator [163us, 999842us]
-		wiggle = wiggleTimeGranularity * time.Duration(1+randDelaySeed.Int63n(int64(wiggle/wiggleTimeGranularity)))
+		// It's not our turn explicitly to sign, delay it.
+		// Wait other validators have signed recently, if timeout we can try sign immediately.
+		backOffTime := time.Duration(d.config.BlockTime) * time.Second // fixed backoff time
+		// wiggle time is random delay (per signer) to allow concurrent signers
+		wiggle := time.Duration(snap.blockLimit()) *
+			wiggleTimeBeforeForkGranularity *
+			time.Duration(1+randDelaySeed.Int63n(int64(backOffTime/wiggleTimeBeforeForkGranularity)))
 
-		delay += fixedBackOffTimeBeforeFork + wiggle
+		delay += backOffTime + fixedBackOffTimeBeforeFork + wiggle
 	}
 	return delay
 }

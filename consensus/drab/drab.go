@@ -883,27 +883,7 @@ func (d *Drab) Authorize(val common.Address, signFn SignerFn, signTxFn SignerTxF
 
 // Argument leftOver is the time reserved for block finalize(calculate root, distribute income...)
 func (d *Drab) Delay(chain consensus.ChainReader, header *types.Header, leftOver *time.Duration) *time.Duration {
-	number := header.Number.Uint64()
-	snap, err := d.snapshot(chain, number-1, header.ParentHash, nil)
-	if err != nil {
-		return nil
-	}
-
-	delay := d.delayForHawaiiFork(snap, header)
-
-	if *leftOver >= time.Duration(d.config.BlockTime)*time.Second {
-		// ignore invalid leftOver
-		log.Error("Delay invalid argument", "leftOver", leftOver.String(), "BlockTime", d.config.BlockTime)
-	} else if *leftOver >= delay {
-		// no left time
-		delay = time.Duration(0)
-		return &delay
-	} else {
-		// delay
-		delay = delay - *leftOver
-	}
-
-	return &delay
+	return nil
 }
 
 // Seal implements consensus.Engine, attempting to create a sealed block using

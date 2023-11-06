@@ -1088,21 +1088,18 @@ func (w *worker) commitWork(interruptCh chan int32, timestamp int64) {
 		return
 	}
 
-	// transaction processing time
-	//
+	// transaction processing timeout
 	fillTimeout := time.Until(time.Unix(int64(work.header.Time), 0))/2 - w.config.DelayLeftOver
 	if fillTimeout <= 0 {
-		log.Error(
-			"fillTimeout is negative or zero, this should never happen",
+		log.Warn(
+			"fillTimeout is negative or zero",
 			"delayLeftOver", w.config.DelayLeftOver,
 			"timestamp", work.header.Time,
 			"now", time.Now().Unix(),
 		)
 		fillTimeout = 200 * time.Millisecond // minimum transaction processing time
 	}
-	if fillTimeout < (w.config.DelayLeftOver * 2) {
-		fillTimeout = w.config.DelayLeftOver * 2
-	}
+
 	deadlineTimer.Reset(fillTimeout)
 
 	// Fill pending transactions from the txpool
