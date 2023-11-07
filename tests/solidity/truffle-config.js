@@ -118,7 +118,7 @@ module.exports = {
                enabled: true,
                runs: 200
             },
-            evmVersion: "london"
+            evmVersion: "byzantium"
          }
       }
    }
