@@ -23,6 +23,22 @@ var (
 	randDelaySeed = rand.New(rand.NewSource(time.Now().UnixNano()))
 )
 
+//// Consensus time schedule design:
+/**
+               ┌──────────────────────────────────────────────────────┐
+               │                           block N                    │
+               ├─────────────────┬───────────────┬────────────────────┤
+Diff No Turn:  │   fillTx time   │ DelayLeftOver │  wait seal block   │
+               └─────────────────┴───────────────┴────────────────────┘
+               ┌──────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────┐
+               │                           block N                    │                           block N+1                     │
+               ├─────────────────┬───────────────┬────────────────────┴─────────────────────┬───────────────────────────────────┴───────────┐
+Diff Turn:     │   fillTx time   │ DelayLeftOver │            never seal block              │            preempt seal block                 │
+               └─────────────────┴───────────────┼────────────────────┬─────────────────────┼───────────────────────────────────────────────┤
+                                                 │  wait header time  │ fixed backoff delay │  random blockTime*blockLimit range (step 11us)│
+                                                 └────────────────────┴─────────────────────┴───────────────────────────────────────────────┘
+**/
+
 func (d *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Duration {
 	delay := time.Until(time.Unix(int64(header.Time), 0)) // time until the block is supposed to be mined
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
@@ -34,6 +50,7 @@ func (d *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Dur
 			wiggleTimeBeforeForkGranularity *
 			time.Duration(1+randDelaySeed.Int63n(int64(backOffTime/wiggleTimeBeforeForkGranularity)))
 
+		// delay = durationToBlockTimestamp + fixedBackOffTimeBeforeFork + randomRange(wiggleTimeBeforeForkGranularity, blockTime*blockLimit)
 		delay += backOffTime + fixedBackOffTimeBeforeFork + wiggle
 	}
 	return delay
