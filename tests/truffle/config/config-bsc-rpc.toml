@@ -6,10 +6,9 @@ EnablePreimageRecording = false
 
 [Eth.Miner]
 GasFloor = 30000000
-GasCeil = 5000000000
-GasPrice = 250000000000
+GasCeil = 40000000
+GasPrice = 5000000000
 Recommit = 10000000000
-Noverify = false
 
 [Eth.Ethash]
 CacheDir = ""
@@ -27,7 +26,7 @@ Locals = []
 NoLocals = true
 Journal = "transactions.rlp"
 Rejournal = 3600000000000
-PriceLimit = 250000000000
+PriceLimit = 5000000000
 PriceBump = 10
 AccountSlots = 128
 GlobalSlots = 10000
@@ -39,7 +38,7 @@ Lifetime = 600000000000
 Blocks = 20
 Percentile = 60
 OracleThreshold = 20
-Default = 250000000000
+Default = 5000000000
 
 [Node]
 DataDir = "node"
