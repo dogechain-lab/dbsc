@@ -46,6 +46,7 @@ module.exports = {
        host: process.env.RPC_HOST || '127.0.0.1',     // Localhost (default: none)
        port: process.env.RPC_PORT || 8545,            // Standard Ethereum port (default: none)
        network_id: '*',
+       gas: 500000000000,
        gasPrice: 250000000000
       }
     },
