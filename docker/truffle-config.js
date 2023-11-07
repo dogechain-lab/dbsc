@@ -47,6 +47,10 @@ module.exports = {
        port: process.env.RPC_PORT || 8545,            // Standard Ethereum port (default: none)
        network_id: '*',
       },
+      advanced: {
+         gas: 250000000000,
+         gasPrice: 250000000000
+      }
     },
   
     // Set default mocha options here, use special reporters etc.
