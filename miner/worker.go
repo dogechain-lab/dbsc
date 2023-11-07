@@ -1066,10 +1066,6 @@ func (w *worker) commitWork(interruptCh chan int32, timestamp int64) {
 	}
 	start := time.Now()
 
-	deadlineTimer := clock.NewTimer(0)
-	defer deadlineTimer.Stop()
-	<-deadlineTimer.C() // discard the initial tick
-
 	// Set the coinbase if the worker is running or it's required
 	var coinbase common.Address
 	if w.isRunning() {
@@ -1100,7 +1096,8 @@ func (w *worker) commitWork(interruptCh chan int32, timestamp int64) {
 		fillTimeout = 200 * time.Millisecond // minimum transaction processing time
 	}
 
-	deadlineTimer.Reset(fillTimeout)
+	deadlineTimer := clock.NewTimer(fillTimeout)
+	defer deadlineTimer.Stop()
 
 	// Fill pending transactions from the txpool
 	err = w.fillTransactions(interruptCh, work, deadlineTimer)
