@@ -13,6 +13,12 @@ EnablePreimageRecording = false
 EWASMInterpreter = ""
 EVMInterpreter = ""
 
+[Eth.Miner]
+GasFloor = 30000000
+GasCeil = 30000000
+GasPrice = 250000000000
+Recommit = 10000000000
+
 [Eth.Ethash]
 CacheDir = ""
 CachesInMem = 0
@@ -24,10 +30,24 @@ DatasetsOnDisk = 0
 DatasetsLockMmap = false
 PowMode = 0
 
+[Eth.TxPool]
+Locals = []
+NoLocals = true
+Journal = "transactions.rlp"
+Rejournal = 3600000000000
+PriceLimit = 250000000000
+PriceBump = 10
+AccountSlots = 128
+GlobalSlots = 10000
+AccountQueue = 64
+GlobalQueue = 5000
+Lifetime = 600000000000
+
 [Eth.GPO]
 Blocks = 20
 Percentile = 60
-OracleThreshold = 100
+OracleThreshold = 20
+Default = 250000000000
 
 [Node]
 DataDir = ""

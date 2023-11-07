@@ -6,7 +6,7 @@ EnablePreimageRecording = false
 
 [Eth.Miner]
 GasFloor = 30000000
-GasCeil = 300000000
+GasCeil = 30000000
 GasPrice = 250000000000
 Recommit = 10000000000
 Noverify = false
