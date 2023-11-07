@@ -103,7 +103,8 @@ module.exports = {
          host: 'localhost',
          port: 8545,
          network_id: '*',
-         gasPrice: 250000000000
+         maxFeePerGas: 250000000000,
+         maxPriorityFeePerGas: 250000000000
       }
    },
    compilers: {
