@@ -293,7 +293,9 @@ func prepare(ctx *cli.Context) {
 		log.Info("Starting Geth in ephemeral dev mode...")
 
 	case !ctx.GlobalIsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting Geth on Ethereum mainnet...")
+		log.Info("Starting Geth on Dogechian mainnet...")
+		// override default network id
+		ctx.GlobalSet(utils.NetworkIdFlag.Name, strconv.Itoa(2000))
 	}
 	// If we're a full node on mainnet without --cache specified, bump default cache allowance
 	if ctx.GlobalString(utils.SyncModeFlag.Name) != "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) && !ctx.GlobalIsSet(utils.NetworkIdFlag.Name) {
@@ -308,6 +310,19 @@ func prepare(ctx *cli.Context) {
 	if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" && !ctx.GlobalIsSet(utils.CacheFlag.Name) {
 		log.Info("Dropping default light client cache", "provided", ctx.GlobalInt(utils.CacheFlag.Name), "updated", 128)
 		ctx.GlobalSet(utils.CacheFlag.Name, strconv.Itoa(128))
+	}
+
+	// override default network config
+	if !ctx.GlobalIsSet(utils.TxPoolPriceLimitFlag.Name) {
+		ctx.GlobalSet(utils.TxPoolPriceLimitFlag.Name, "250000000000") // 250 Gwei
+	}
+
+	if !ctx.GlobalIsSet(utils.MinerGasPriceFlag.Name) {
+		ctx.GlobalSet(utils.MinerGasPriceFlag.Name, "250000000000") // 250 Gwei
+	}
+
+	if !ctx.GlobalIsSet(utils.MinerGasLimitFlag.Name) {
+		ctx.GlobalSet(utils.MinerGasLimitFlag.Name, "30000000") // 30M
 	}
 }
 
