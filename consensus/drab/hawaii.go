@@ -41,6 +41,11 @@ Diff Turn:     │   fillTx time   │ DelayLeftOver │            never seal b
 
 func (d *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Duration {
 	delay := time.Until(time.Unix(int64(header.Time), 0)) // time until the block is supposed to be mined
+	// if delay <= 0 we are late, so we should try to sign immediately
+	if delay <= 0 {
+		delay = 0
+	}
+
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
 		// It's not our turn explicitly to sign, delay it.
 		// Wait other validators have signed recently, if timeout we can try sign immediately.
