@@ -89,7 +89,7 @@ var Defaults = Config{
 	DisableDiffProtocol:     true,
 	DiffBlock:               uint64(86400),
 	Miner: miner.Config{
-		GasCeil:       8000000,
+		GasCeil:       30000000,
 		GasPrice:      big.NewInt(250 * params.GWei),
 		Recommit:      3 * time.Second,
 		DelayLeftOver: 50 * time.Millisecond,

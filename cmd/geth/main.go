@@ -324,6 +324,10 @@ func prepare(ctx *cli.Context) {
 	if !ctx.GlobalIsSet(utils.MinerGasLimitFlag.Name) {
 		ctx.GlobalSet(utils.MinerGasLimitFlag.Name, "30000000") // 30M
 	}
+
+	if ctx.GlobalIsSet(utils.RPCGlobalGasCapFlag.Name) {
+		ctx.GlobalSet(utils.RPCGlobalGasCapFlag.Name, "30000000") // 30M
+	}
 }
 
 // geth is the main entry point into the system if no special subcommand is ran.
