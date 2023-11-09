@@ -15,7 +15,7 @@ const (
 	initialBackOffTime = uint64(1) // second
 	processBackOffTime = uint64(1) // second
 
-	wiggleTimeBeforeForkGranularity = 11 * time.Microsecond // Time granularity of the random delay
+	wiggleTimeBeforeForkGranularity = 3 * time.Millisecond // Time granularity of the random delay
 	fixedBackOffTimeBeforeFork      = 200 * time.Millisecond
 )
 
