@@ -922,7 +922,7 @@ func (d *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(snap.blockLimit()); number < limit || seen+limit > number {
 				log.Info("Sealing found signed recently, must wait for others", "seen", seen, "limit", limit, "number", number)
-				return nil
+				return errRecentlySigned
 			}
 		}
 	}
