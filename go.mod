@@ -238,6 +238,7 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/tendermint/tendermint => github.com/bnb-chain/tendermint v0.31.15
-
-replace github.com/lucas-clemente/quic-go => github.com/quic-go/quic-go v0.28.1
+replace (
+	github.com/lucas-clemente/quic-go => github.com/quic-go/quic-go v0.28.1
+	github.com/tendermint/tendermint => github.com/bnb-chain/tendermint v0.31.15
+)
