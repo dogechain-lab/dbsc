@@ -23,7 +23,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dogechain-lab/dogechain/consensus/ibft"
 	"github.com/ethereum/go-ethereum/core/dccontracts"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -241,7 +240,8 @@ func genesisGen(c *cli.Context) error {
 		}
 	}
 
-	genesis.ExtraData = make([]byte, ibft.IstanbulExtraVanity)
+	// IstanbulExtraVanity = 32
+	genesis.ExtraData = make([]byte, 32)
 	ibftExtra := &types.IBFTExtra{
 		Validators:    validatorsAddress,
 		Seal:          []byte{},
