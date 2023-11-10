@@ -883,32 +883,7 @@ func (d *Drab) Authorize(val common.Address, signFn SignerFn, signTxFn SignerTxF
 
 // Argument leftOver is the time reserved for block finalize(calculate root, distribute income...)
 func (d *Drab) Delay(chain consensus.ChainReader, header *types.Header, leftOver *time.Duration) *time.Duration {
-	number := header.Number.Uint64()
-	snap, err := d.snapshot(chain, number-1, header.ParentHash, nil)
-	if err != nil {
-		return nil
-	}
-
-	delay := d.delayForHawaiiFork(snap, header)
-
-	if *leftOver >= time.Duration(d.config.BlockTime)*time.Second {
-		// ignore invalid leftOver
-		log.Error("Delay invalid argument", "leftOver", leftOver.String(), "BlockTime", d.config.BlockTime)
-	} else if *leftOver >= delay {
-		// no left time
-		delay = time.Duration(0)
-		return &delay
-	} else {
-		// delay
-		delay = delay - *leftOver
-	}
-
-	// The blocking time should be no more than half of period
-	half := time.Duration(d.config.BlockTime) * time.Second / 2
-	if delay > half {
-		delay = half
-	}
-	return &delay
+	return nil
 }
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
@@ -947,7 +922,7 @@ func (d *Drab) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 			// Signer is among recents, only wait if the current block doesn't shift it out
 			if limit := uint64(snap.blockLimit()); number < limit || seen+limit > number {
 				log.Info("Sealing found signed recently, must wait for others", "seen", seen, "limit", limit, "number", number)
-				return nil
+				return errRecentlySigned
 			}
 		}
 	}

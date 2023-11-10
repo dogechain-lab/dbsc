@@ -11,19 +11,52 @@ import (
 )
 
 const (
-	wiggleTime                 = uint64(1)              // second, Random delay (per signer) to allow concurrent signers
-	initialBackOffTime         = uint64(1)              // second
-	processBackOffTime         = uint64(1)              // second
-	wiggleTimeBeforeFork       = 500 * time.Millisecond // Random delay (per signer) to allow concurrent signers
-	fixedBackOffTimeBeforeFork = 200 * time.Millisecond
+	wiggleTime         = uint64(1) // second, Random delay (per signer) to allow concurrent signers
+	initialBackOffTime = uint64(1) // second
+	processBackOffTime = uint64(1) // second
+
+	wiggleTimeBeforeForkGranularity = 3 * time.Millisecond // Time granularity of the random delay
+	fixedBackOffTimeBeforeFork      = 200 * time.Millisecond
 )
 
+var (
+	randDelaySeed = rand.New(rand.NewSource(time.Now().UnixNano()))
+)
+
+//// Consensus time schedule design:
+/**
+               ┌──────────────────────────────────────────────────────┐
+               │                           block N                    │
+               ├─────────────────┬───────────────┬────────────────────┤
+Diff No Turn:  │   fillTx time   │ DelayLeftOver │  wait seal block   │
+               └─────────────────┴───────────────┴────────────────────┘
+               ┌──────────────────────────────────────────────────────┬─────────────────────────────────────────────────────────┐
+               │                           block N                    │                           block N+1                     │
+               ├─────────────────┬───────────────┬────────────────────┴─────────────────────┬───────────────────────────────────┴───────────┐
+Diff Turn:     │   fillTx time   │ DelayLeftOver │            never seal block              │            preempt seal block                 │
+               └─────────────────┴───────────────┼────────────────────┬─────────────────────┼───────────────────────────────────────────────┤
+                                                 │  wait header time  │ fixed backoff delay │  random blockTime*blockLimit range (step 11us)│
+                                                 └────────────────────┴─────────────────────┴───────────────────────────────────────────────┘
+**/
+
 func (d *Drab) delayForHawaiiFork(snap *Snapshot, header *types.Header) time.Duration {
-	delay := time.Until(time.Unix(int64(header.Time), 0)) // nolint: gosimple
+	delay := time.Until(time.Unix(int64(header.Time), 0)) // time until the block is supposed to be mined
+	// if delay <= 0 we are late, so we should try to sign immediately
+	if delay <= 0 {
+		delay = 0
+	}
+
 	if header.Difficulty.Cmp(diffNoTurn) == 0 {
-		// It's not our turn explicitly to sign, delay it a bit
-		wiggle := time.Duration(snap.blockLimit()) * wiggleTimeBeforeFork
-		delay += fixedBackOffTimeBeforeFork + time.Duration(rand.Int63n(int64(wiggle)))
+		// It's not our turn explicitly to sign, delay it.
+		// Wait other validators have signed recently, if timeout we can try sign immediately.
+		backOffTime := time.Duration(d.config.BlockTime) * time.Second // fixed backoff time
+		// wiggle time is random delay (per signer) to allow concurrent signers
+		wiggle := time.Duration(snap.blockLimit()) *
+			wiggleTimeBeforeForkGranularity *
+			time.Duration(1+randDelaySeed.Int63n(int64(backOffTime/wiggleTimeBeforeForkGranularity)))
+
+		// delay = durationToBlockTimestamp + fixedBackOffTimeBeforeFork + randomRange(wiggleTimeBeforeForkGranularity, blockTime*blockLimit)
+		delay += backOffTime + fixedBackOffTimeBeforeFork + wiggle
 	}
 	return delay
 }
