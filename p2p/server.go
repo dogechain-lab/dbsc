@@ -944,13 +944,6 @@ func (srv *Server) checkInboundConn(remoteIP net.IP) error {
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
 func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) error {
-	// If dialDest is verify node, set verifyConn flags.
-	for _, n := range srv.VerifyNodes {
-		if dialDest.ID() == n.ID() {
-			flags |= verifyConn
-		}
-	}
-
 	c := &conn{fd: fd, flags: flags, cont: make(chan error)}
 	if dialDest == nil {
 		c.transport = srv.newTransport(fd, nil)
@@ -995,6 +988,15 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 	} else {
 		c.node = nodeFromConn(remotePubkey, c.fd)
 	}
+
+	// If node is verify node, set verifyConn flags.
+	for _, n := range srv.VerifyNodes {
+		if n != nil && c.node.ID() == n.ID() {
+			c.set(verifyConn, true)
+			break
+		}
+	}
+
 	clog := srv.log.New("id", c.node.ID(), "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	err = srv.checkpoint(c, srv.checkpointPostHandshake)
 	if err != nil {
