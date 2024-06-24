@@ -20,7 +20,7 @@ require (
 	github.com/docker/docker v24.0.7+incompatible
 	github.com/dop251/goja v0.0.0-20220405120441-9037c2b61cbf
 	github.com/edsrzf/mmap-go v1.0.0
-	github.com/fatih/color v1.13.0
+	github.com/fatih/color v1.16.0
 	github.com/fjl/memsize v0.0.0-20190710130421-bcb5799ab5e5
 	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff
 	github.com/go-stack/stack v1.8.0
@@ -42,8 +42,8 @@ require (
 	github.com/jedisct1/go-minisign v0.0.0-20190909160543-45766022959e
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/karalabe/usb v0.0.2
-	github.com/mattn/go-colorable v0.1.12
-	github.com/mattn/go-isatty v0.0.16
+	github.com/mattn/go-colorable v0.1.13
+	github.com/mattn/go-isatty v0.0.20
 	github.com/naoina/toml v0.1.2-0.20170918210437-9fafd6967416
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/panjf2000/ants/v2 v2.8.0
@@ -62,7 +62,7 @@ require (
 	github.com/tyler-smith/go-bip39 v1.1.0
 	golang.org/x/crypto v0.14.0
 	golang.org/x/sync v0.1.0
-	golang.org/x/sys v0.13.0
+	golang.org/x/sys v0.20.0
 	golang.org/x/text v0.13.0
 	golang.org/x/time v0.3.0
 	golang.org/x/tools v0.6.0
@@ -73,7 +73,7 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/dogechain-lab/dogechain v1.2.6-0.20230801015717-955cdb2527b3
 	github.com/fatih/structs v1.1.0
-	github.com/hashicorp/go-hclog v1.5.0
+	github.com/hashicorp/go-hclog v1.6.3
 	github.com/prometheus/client_golang v1.14.0
 	go.uber.org/automaxprocs v1.5.3
 )
@@ -128,7 +128,7 @@ require (
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.2 // indirect
+	github.com/hashicorp/go-retryablehttp v0.7.7 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/go-secure-stdlib/parseutil v0.1.7 // indirect
 	github.com/hashicorp/go-secure-stdlib/strutil v0.1.2 // indirect
