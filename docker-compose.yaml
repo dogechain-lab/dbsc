@@ -1,54 +1,61 @@
 version: '3.6'
 services:
   init:
-    image: alpine
+    image: alpine:3.17
     command:
       - /bin/sh
       - -c
       - |
         chown -R 1000:1000 /data
+        chown -R 1000:1000 /config
 
         echo "done grany data directory permission"
+
+        if [ ! -f /bsc/config/genesis.json ] then
+          echo "you need download genesis.json to config directory"
+        fi
+
+        if [ ! -f /data/geth ] then
+          echo "you need download latest database snapshot"
+        fi
     volumes:
-      - data:/data
+      - ./data:/data
+      - ./config:/bsc/config
 
   bsc:
     build:
       context: .
       dockerfile: Dockerfile
-    environment:
-      - NETWORK=mainnet
     restart: unless-stopped
     ports:
       - 30303:30303
-      - 30311:30311
       - 8545:8545
       - 8546:8546
-      - 8575:8575
-      - 8576:8576
+    command:
+      - --datadir=/data/
+      - --genesis=/bsc/config/genesis.json
+      - --bootnodes="enode://c2d67c2fc2bd060a77bc850430a87fd8847d689302f6447c1cfef1422e2d0d91607574d4a7707ca57c20c4ecc94b0561653f5ade5ed15065954479fcbb306eee@54.210.49.16:30303,enode://09c67de9f19ba2edb4c5a48e03ac18035b25b7273963da68a491953c310e24e49628c5e7727dade42df26d3c814ceab80ba71d0896416aba442e648a2b8df927@18.119.72.163:30303"
+      - --networkid=2000
+      - --txpool.pricelimit=250000000000
+      - --miner.gasprice=250000000000
+      - --miner.gaslimit=30000000
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api="eth,net,web3"
+      - --http.vhosts="*"
+      - --http.corsdomain="*"
+      - --ws
+      - --ws.addr=0.0.0.0
+      - --ws.port=8546
+      - --ws.api="eth,net,web3"
+      - --ws.origins="*"
     healthcheck:
       test: |
-        [[ "$NETWORK" == "testnet" ]] && PORT=8575 || PORT=8545;
-        netstat -tunlp | grep $PORT > /dev/null; if [ 0 != $$? ]; then exit 1; else exit 0; fi;
-
+        netstat -tunlp | grep 8545 > /dev/null; if [ 0 != $$? ]; then exit 1; else exit 0; fi;
       interval: 5s
       retries: 5
       start_period: 10s
       timeout: 3s
     volumes:
-      - data:/data
-      - config:/bsc/config
-
-volumes:
-  config:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '/tmp/bsc/config/mainnet'
-  data:
-    driver: local
-    driver_opts:
-      type: 'none'
-      o: 'bind'
-      device: '/tmp/bsc/data/mainnet'
+      - ./data:/data
+      - ./config:/bsc/config
