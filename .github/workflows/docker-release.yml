@@ -27,8 +27,12 @@ jobs:
           --label "org.opencontainers.image.licenses=LGPL-3.0,GPL-3.0" \
           -f ./Dockerfile -t "${IMAGE_NAME}"
 
-      - name: Log into registry
-        run: echo "${{ secrets.PACKAGE_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Push image
         run: |
